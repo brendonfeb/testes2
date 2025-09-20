@@ -240,18 +240,17 @@
         .justified-text { text-align: justify; }
 
         #loader-overlay {
-            position: absolute;
+            position: fixed;
             inset: 0;
-            background-color: var(--card-bg-darker);
+            background-color: rgba(5, 5, 7, 0.8);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            z-index: 40;
+            z-index: 60;
             transition: opacity 0.3s ease;
-            border-radius: 1.5rem;
             opacity: 0;
             visibility: hidden;
         }
@@ -278,6 +277,14 @@
 </head>
 <body class="min-h-screen">
     
+    <!-- Fullscreen loader for initial data fetch -->
+    <div id="loader-overlay">
+        <div class="progress-container">
+            <div id="progress-bar" class="w-0"></div>
+        </div>
+        <p id="progress-text" class="mt-4 text-gray-400 text-sm">A carregar dados...</p>
+    </div>
+
     <!-- Nickname Modal -->
     <div id="nickname-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-opacity duration-500">
         <div class="glass-card w-full max-w-sm rounded-2xl p-8 text-center">
@@ -307,13 +314,6 @@
 
         <main id="main-container" class="w-full max-w-lg flex-grow flex items-center justify-center opacity-0">
             <div id="content-box" class="glass-card w-full h-full min-h-[50vh] rounded-2xl p-4 sm:p-5 flex-col hidden relative">
-                <!-- Loader com barra de progresso -->
-                <div id="loader-overlay" class="absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-300 rounded-2xl">
-                    <div class="progress-container">
-                        <div id="progress-bar" class="w-0"></div>
-                    </div>
-                    <p id="progress-text" class="mt-4 text-gray-400 text-sm">A carregar dados...</p>
-                </div>
                 <div id="box-content" class="flex-grow overflow-hidden"></div>
                 <button id="close-btn" class="absolute top-3 right-3 text-gray-500 hover:text-gray-200 transition-colors z-20">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -354,23 +354,26 @@
         let currentStep = 0;
         let userNickname = '';
         let isInitialLayout = true;
+        let lastFetchedCSV = '';
         
         let contentData = {};
         
         function updateProgressBar(progress) {
             progressBar.style.width = `${progress}%`;
-            progressText.textContent = `${Math.round(progress)}%`;
+            progressText.textContent = `A carregar dados... ${Math.round(progress)}%`;
             if (progress >= 100) {
                  setTimeout(() => loaderOverlay.classList.remove('active'), 300);
             }
         }
 
-        async function fetchAndOrganizeData() {
-            loaderOverlay.classList.add('active');
-            updateProgressBar(0);
+        async function fetchAndOrganizeData(isUpdate = false) {
+            if (!isUpdate) {
+                loaderOverlay.classList.add('active');
+                updateProgressBar(0);
+            }
             
             try {
-                const response = await fetch(SHEET_URL);
+                const response = await fetch(SHEET_URL, { cache: "no-store" });
                 if (!response.ok) {
                     throw new Error(`Network response was not ok: ${response.statusText}`);
                 }
@@ -382,45 +385,39 @@
 
                 while(true) {
                     const { done, value } = await reader.read();
-                    if (done) {
-                        break;
-                    }
+                    if (done) break;
                     chunks.push(value);
                     receivedLength += value.length;
                     
-                    if (contentLength) {
+                    if (contentLength && !isUpdate) {
                         const progress = (receivedLength / contentLength) * 100;
                         updateProgressBar(progress);
                     }
                 }
                 
-                let csvText = '';
-                if (chunks.length > 0) {
-                    const totalBuffer = new Uint8Array(receivedLength);
-                    let position = 0;
-                    for(let chunk of chunks) {
-                        totalBuffer.set(chunk, position);
-                        position += chunk.length;
-                    }
-                    csvText = new TextDecoder().decode(totalBuffer);
-                } else {
-                    csvText = await response.text();
+                const totalBuffer = new Uint8Array(receivedLength);
+                let position = 0;
+                for(let chunk of chunks) {
+                    totalBuffer.set(chunk, position);
+                    position += chunk.length;
                 }
+                const csvText = new TextDecoder().decode(totalBuffer);
 
-                updateProgressBar(100);
+                if (isUpdate && csvText === lastFetchedCSV) {
+                    console.log("Nenhuma atualização de conteúdo encontrada.");
+                    return;
+                }
+                lastFetchedCSV = csvText;
 
                 const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '');
                 const courses = {};
-
                 const linesByCourse = {};
                 lines.forEach(line => {
                     const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(item => item.trim().replace(/^"|"$/g, ''));
                     if (parts.length < 4) return;
                     const [courseId] = parts;
                     if (!courseId) return;
-                    if (!linesByCourse[courseId]) {
-                        linesByCourse[courseId] = [];
-                    }
+                    if (!linesByCourse[courseId]) linesByCourse[courseId] = [];
                     linesByCourse[courseId].push(parts);
                 });
 
@@ -433,7 +430,6 @@
                     courseLines.forEach(parts => {
                         const [, stepIndexStr, type, text, spoilerTitle] = parts;
                         const stepIndex = parseInt(stepIndexStr, 10);
-
                         if (!type || isNaN(stepIndex)) return;
 
                         if (!currentStepData || currentStepData.index !== stepIndex) {
@@ -444,8 +440,7 @@
                             }
                             stack = [currentStepData.content];
                         }
-
-                        let targetArray = stack[stack.length - 1];
+                        const targetArray = stack[stack.length - 1];
                         const newItem = { type, text: text ? text.replace(/\\n/g, '\n') : '' };
 
                         if (type === 'spoiler1' || type === 'spoiler3') {
@@ -454,17 +449,13 @@
                             targetArray.push(newItem);
                             stack.push(newItem.content);
                         } else if (type === 'spoiler2' || type === 'spoiler4') {
-                            if (stack.length > 1) {
-                                stack.pop();
-                            }
+                            if (stack.length > 1) stack.pop();
                         } else {
                             targetArray.push(newItem);
                         }
                     });
-
                     courses[courseId].steps.sort((a, b) => a.index - b.index);
                 }
-
 
                 if (courses['CFi']) courses['CFi'].title = 'CURSO DE FORMAÇÃO INICIAL';
                 if (courses['CFSd']) courses['CFSd'].title = 'CURSO DE FORMAÇÃO DE SOLDADO/POLICIAL';
@@ -474,13 +465,23 @@
                 
                 contentData = courses;
                 initializeCopiedStatus();
-                console.log("Conteúdo das aulas carregado com sucesso!", contentData);
+                
+                if (isUpdate) {
+                    console.log("Conteúdo atualizado em tempo real!");
+                    if (currentOption) renderStep();
+                } else {
+                    console.log("Conteúdo das aulas carregado com sucesso!", contentData);
+                }
+
             } catch (error) {
                 console.error("Erro ao carregar os dados das aulas:", error);
-                // Avoid using alert() in production apps. Using a custom modal would be better.
-                boxContent.innerHTML = `<div class="text-center text-red-400 p-4">Erro ao carregar o conteúdo das aulas. Por favor, recarregue a página.</div>`;
+                if (!isUpdate) {
+                    boxContent.innerHTML = `<div class="text-center text-red-400 p-4">Erro ao carregar o conteúdo. Por favor, recarregue a página.</div>`;
+                }
             } finally {
-                 loaderOverlay.classList.remove('active');
+                 if (!isUpdate) {
+                    loaderOverlay.classList.remove('active');
+                 }
             }
         }
 
@@ -491,6 +492,7 @@
                 document.querySelector('main').classList.remove('opacity-0');
                 document.querySelector('footer').classList.remove('opacity-0');
             }, 100);
+            setInterval(() => fetchAndOrganizeData(true), 30000); // Verifica atualizações a cada 30 segundos
         }
         
         function getCopyableLines(items, lines = []) {
@@ -615,61 +617,76 @@
         }
 
         function renderStep() {
-            const data = contentData[currentOption];
-            if (!data || !data.steps || data.steps.length === 0) {
-                 boxContent.innerHTML = `<div class="text-center text-gray-400 p-4">Nenhum conteúdo disponível para esta opção.</div>`;
-                return;
-            }
-
-            const stepData = data.steps.find(s => s.index === currentStep);
-             if (!stepData) {
-                console.error(`Passo ${currentStep} não encontrado para ${currentOption}`);
-                boxContent.innerHTML = `<div class="text-center text-gray-400 p-4">Página não encontrada.</div>`;
-                return;
-            }
-            const totalSteps = data.steps.length;
-            const lineCounter = { count: 0 };
-            const contentHtml = renderContentRecursive(stepData.content, lineCounter);
-            
-            const isFinalPage = stepData.content.some(item => item.type === 'final-page');
-
             boxContent.innerHTML = `
-                <div class="flex flex-col h-full animate-fade-in">
-                    <h2 class="text-lg font-bold tracking-tight text-center mb-2 text-gray-100">${data.title}</h2>
-                    <div id="box-content-scroll" class="flex-grow overflow-y-auto pr-2 space-y-1 pb-3">
-                        ${contentHtml}
-                    </div>
-                    ${isFinalPage ? '' : `
-                    <div class="mt-auto pt-3 flex items-center justify-between border-t border-white/10">
-                        <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="prev-btn" title="Anterior" ${currentStep === 0 ? 'disabled' : ''}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                        </button>
-                        
-                        <div class="flex items-center gap-2">
-                            <span class="text-gray-500 font-medium text-sm">Página</span>
-                            <input type="number" id="step-input" class="w-12 text-center text-sm font-medium bg-gray-700/50 rounded-md border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500" value="${currentStep + 1}" min="1" max="${totalSteps}">
-                            <span class="text-gray-500 font-medium text-sm">de ${totalSteps}</span>
-                            <button id="go-btn" class="nav-control p-2 rounded-lg transition-colors text-gray-400" title="Ir para a página">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                            </button>
-                        </div>
-                        
-                        <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="next-btn" title="Próximo" ${currentStep === totalSteps - 1 ? 'disabled' : ''}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </button>
-                    </div>
-                    `}
+                <div class="flex items-center justify-center h-full animate-fade-in">
+                    <svg class="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
                 </div>
             `;
             
-            updateCopyStatusStyles();
+            setTimeout(() => {
+                const data = contentData[currentOption];
+                if (!data || !data.steps || data.steps.length === 0) {
+                     boxContent.innerHTML = `<div class="text-center text-gray-400 p-4 animate-fade-in">Nenhum conteúdo disponível para esta opção.</div>`;
+                    return;
+                }
+
+                const stepData = data.steps.find(s => s.index === currentStep);
+                 if (!stepData) {
+                    currentStep = 0; // Fallback to first step if current is invalid after an update
+                    renderStep();
+                    return;
+                }
+                const totalSteps = data.steps.length;
+                const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
+                const lineCounter = { count: 0 };
+                const contentHtml = renderContentRecursive(stepData.content, lineCounter);
+                
+                const isFinalPage = stepData.content.some(item => item.type === 'final-page');
+
+                boxContent.innerHTML = `
+                    <div class="flex flex-col h-full animate-fade-in">
+                        <h2 class="text-lg font-bold tracking-tight text-center mb-2 text-gray-100">${data.title}</h2>
+                        <div id="box-content-scroll" class="flex-grow overflow-y-auto pr-2 space-y-1 pb-3">
+                            ${contentHtml}
+                        </div>
+                        ${isFinalPage ? '' : `
+                        <div class="mt-auto pt-3 flex items-center justify-between border-t border-white/10">
+                            <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="prev-btn" title="Anterior" ${currentOrderIndex === 0 ? 'disabled' : ''}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            </button>
+                            
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-500 font-medium text-sm">Página</span>
+                                <input type="number" id="step-input" class="w-12 text-center text-sm font-medium bg-gray-700/50 rounded-md border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500" value="${currentOrderIndex + 1}" min="1" max="${totalSteps}">
+                                <span class="text-gray-500 font-medium text-sm">de ${totalSteps}</span>
+                                <button id="go-btn" class="nav-control p-2 rounded-lg transition-colors text-gray-400" title="Ir para a página">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                                </button>
+                            </div>
+                            
+                            <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="next-btn" title="Próximo" ${currentOrderIndex === totalSteps - 1 ? 'disabled' : ''}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+                        </div>
+                        `}
+                    </div>
+                `;
+                
+                updateCopyStatusStyles();
+            }, 150);
         }
 
         function updateCopyStatusStyles() {
             const data = contentData[currentOption];
-            if (!data || !data.copiedStatus) return;
+            if (!data || !data.copiedStatus || !data.steps) return;
             
-            const stepStatus = data.copiedStatus[currentStep];
+            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
+            if (currentOrderIndex === -1) return;
+
+            const stepStatus = data.copiedStatus[currentOrderIndex];
             if (!stepStatus) return;
 
             const copyableLineElements = boxContent.querySelectorAll('.copyable-line');
@@ -780,7 +797,8 @@
             if (!data) return;
 
             const textToCopy = copyBtn.dataset.copyText;
-            const stepStatus = data.copiedStatus[currentStep];
+            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
+            const stepStatus = data.copiedStatus[currentOrderIndex];
             const currentIndex = parseInt(copyBtn.dataset.lineIndex, 10);
 
             if (isNaN(currentIndex) || !stepStatus || currentIndex >= stepStatus.length) {
@@ -822,15 +840,36 @@
 
         function handleGoToStep() {
             const stepInput = document.getElementById('step-input');
-            const stepNumber = parseInt(stepInput.value, 10);
-            const totalSteps = contentData[currentOption].steps.length;
+            const pageNumber = parseInt(stepInput.value, 10);
+            const data = contentData[currentOption];
+            if (!data || !data.steps) return;
+            const totalSteps = data.steps.length;
 
-            if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > totalSteps) {
+            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
+
+            if (isNaN(pageNumber) || pageNumber < 1 || pageNumber > totalSteps) {
                 stepInput.classList.add('border-red-500');
                 setTimeout(() => stepInput.classList.remove('border-red-500'), 1000);
-            } else {
-                currentStep = stepNumber - 1;
-                renderStep();
+                stepInput.value = currentOrderIndex + 1; // Reset to current page number
+                return;
+            } 
+            
+            const targetOrderIndex = pageNumber - 1;
+            const targetStep = data.steps[targetOrderIndex].index;
+
+            if (targetStep !== currentStep) {
+                const contentContainer = boxContent.querySelector('.flex.flex-col');
+                if (contentContainer) {
+                    contentContainer.classList.remove('animate-fade-in');
+                    contentContainer.classList.add('animate-content-fade-out');
+                    setTimeout(() => {
+                        currentStep = targetStep;
+                        renderStep();
+                    }, 300);
+                } else {
+                    currentStep = targetStep;
+                    renderStep();
+                }
             }
         }
 
@@ -1202,3 +1241,4 @@
     </script>
 </body>
 </html>
+
