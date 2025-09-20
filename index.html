@@ -486,11 +486,13 @@
                 }
             }, 50);
             
+            /* ATUALIZAÇÃO EM TEMPO REAL DESATIVADA A PEDIDO DO USUÁRIO
             setInterval(() => {
                 if (currentOption && !isFetching) {
                     fetchAndOrganizeData(currentOption, true);
                 }
-            }, 10000);
+            }, 10000); // Check for updates every 10 seconds
+            */
         }
         
         function getCopyableLines(items, lines = []) {
@@ -1211,4 +1213,5 @@
     </script>
 </body>
 </html>
+
 
