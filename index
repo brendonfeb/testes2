@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[EsGM] Central de Aulas</title>
+    <link rel="icon" type="image/png" href="https://i.imgur.com/j0Wl6DQ.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: rgb(5, 5, 7);
+            --card-bg: rgba(18, 18, 20, 0.65);
+            --card-bg-darker: rgba(12, 12, 14, 0.8);
+            --border-color: rgba(55, 65, 81, 0.4);
+            --border-hover-color: rgba(112, 190, 250, 0.3);
+            --text-color: rgb(240, 240, 245);
+            --accent-blue: rgb(112, 190, 250);
+            --accent-blue-shadow: rgba(112, 190, 250, 0.2);
+            --accent-green: rgb(74, 222, 128);
+            --accent-red: rgb(248, 113, 113);
+            --text-muted: rgb(160, 160, 165);
+        }
+        body {
+            font-family: 'Inter Tight', sans-serif;
+            background-color: var(--bg-color);
+            background-image: url('https://i.imgur.com/08qCnMt.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            overflow-x: hidden;
+            color: var(--text-muted);
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: radial-gradient(ellipse at center, rgba(112, 190, 250, 0.5) 0%, transparent 60%);
+            background-size: 200% 200%;
+            filter: blur(150px);
+            opacity: 0.15;
+            animation: wave-animation 40s ease-in-out infinite;
+        }
+        .glass-card {
+            background-color: var(--card-bg);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid transparent;
+            background-clip: padding-box;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            position: relative;
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .glass-card::before, .glass-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit; 
+            padding: 1px;
+            -webkit-mask:  linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#ffffff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        .glass-card::before {
+            background: linear-gradient(135deg, var(--border-color), rgba(255, 255, 255, 0.1));
+            z-index: 1;
+        }
+        .glass-card::after {
+            background: linear-gradient(135deg, var(--border-hover-color), var(--accent-blue));
+            opacity: 0;
+            z-index: 2;
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #content-box.glass-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        }
+        #content-box.glass-card:hover::after {
+            opacity: 1;
+        }
+        .nav-btn {
+            color: var(--text-muted);
+            transition: color 0.3s ease, transform 0.3s ease;
+        }
+        .nav-btn:not(.active):hover {
+            color: var(--text-color);
+            transform: translateY(-2px);
+        }
+        .nav-btn.active {
+            color: var(--text-color);
+        }
+        .nav-control:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .nav-control:not(:disabled):hover {
+            background-color: var(--accent-blue-shadow);
+            color: var(--accent-blue);
+        }
+        #nav-indicator {
+            position: absolute;
+            bottom: -2px;
+            height: 2px;
+            background-image: linear-gradient(to right, var(--accent-blue), #86e7f0);
+            box-shadow: 0 0 12px var(--accent-blue-shadow), 0 0 5px var(--accent-blue-shadow);
+            border-radius: 1px;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+            opacity: 0;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes slideUpFade { from { transform: translateY(25px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        @keyframes contentFadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(10px); }
+        }
+        @keyframes gradient-move {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        @keyframes wave-animation {
+            0% { transform: translate(-10%, -10%) scale(1.1); opacity: 0.15; }
+            50% { transform: translate(10%, 10%) scale(1.3); opacity: 0.25; }
+            100% { transform: translate(-10%, -10%) scale(1.1); opacity: 0.15; }
+        }
+        .animate-scale-up { animation: scaleUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        .animate-slide-up-fade { animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        .animate-fade-out { animation: fadeOut 0.4s ease-in forwards; }
+        .animate-content-fade-out { animation: contentFadeOut 0.3s ease-out forwards; }
+        
+        main, footer { transition: opacity 0.7s ease; }
+        
+        .main-title {
+            background: linear-gradient(45deg, #a1a1aa, #e5e7eb, #93c5fd);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradient-move 8s ease-in-out infinite;
+        }
+        .copyable-line {
+            transition: background-color 0.3s ease;
+        }
+        .copyable-line .copy-btn {
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: translateX(-5px);
+        }
+        .copyable-line:hover .copy-btn {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        #nickname-input {
+            background-color: var(--card-bg-darker);
+            border-color: var(--border-color);
+        }
+        #nickname-input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px var(--accent-blue-shadow);
+        }
+        
+        #save-nickname-btn {
+            background: linear-gradient(45deg, #2563eb, var(--accent-blue));
+            box-shadow: 0 4px 20px 0 rgba(59, 130, 246, 0.35);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        #save-nickname-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 25px 0 rgba(59, 130, 246, 0.45);
+        }
+        #box-content-scroll::-webkit-scrollbar { width: 6px; }
+        #box-content-scroll::-webkit-scrollbar-track { background: transparent; }
+        #box-content-scroll::-webkit-scrollbar-thumb {
+            background-color: rgba(112, 190, 250, 0.4);
+            border-radius: 10px;
+            transition: background-color 0.3s ease;
+        }
+        #box-content-scroll::-webkit-scrollbar-thumb:hover { background-color: rgba(112, 190, 250, 0.7); }
+        .spoiler-toggle {
+            background-color: rgba(55, 65, 81, 0.3);
+            transition: background-color 0.3s ease;
+        }
+        .spoiler-toggle:hover {
+            background-color: var(--border-color);
+        }
+        .spoiler-content {
+            display: grid;
+            grid-template-rows: 0fr;
+            background-color: var(--card-bg-darker);
+            border-radius: 0.5rem;
+            transition: grid-template-rows 0.5s cubic-bezier(0.4, 0, 0.2, 1), margin-top 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .spoiler-content:not(.hidden) {
+            grid-template-rows: 1fr;
+            margin-top: 0.5rem;
+        }
+        .spoiler-content > div {
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease 0.2s;
+        }
+        .spoiler-content:not(.hidden) > div {
+            opacity: 1;
+        }
+        .spoiler-toggle .arrow {
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .spoiler-toggle:not(.collapsed) .arrow {
+            transform: rotate(180deg);
+        }
+        .final-page-button {
+            font-weight: 600;
+            border-radius: 0.5rem;
+            transition: all 0.3s ease-in-out;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            background-color: var(--card-bg-darker);
+        }
+        .final-page-button:hover {
+            transform: translateY(-4px) scale(1.03);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            border-color: var(--accent-blue);
+            background-color: var(--card-bg);
+            color: var(--text-color);
+        }
+        .btn-system:hover { box-shadow: 0 10px 25px var(--accent-blue-shadow); }
+        
+        .justified-text { text-align: justify; }
+    </style>
+</head>
+<body class="min-h-screen">
+    
+    <!-- Nickname Modal -->
+    <div id="nickname-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-opacity duration-500">
+        <div class="glass-card w-full max-w-sm rounded-2xl p-8 text-center">
+            <h2 class="text-2xl font-bold mb-4 text-gray-100">Bem-vindo!</h2>
+            <p class="text-gray-400 mb-6">Por favor, insira seu nickname para personalizar os scripts.</p>
+            <input id="nickname-input" type="text" placeholder="Digite seu nickname aqui..." class="w-full text-white placeholder-gray-400 rounded-lg px-4 py-3 border focus:outline-none transition-all duration-300">
+            <button id="save-nickname-btn" class="w-full text-white font-bold py-3 px-8 rounded-lg mt-6">
+                Salvar e Continuar
+            </button>
+        </div>
+    </div>
+    
+    <!-- Main App Wrapper -->
+    <div id="app-wrapper" class="w-full min-h-screen flex flex-col items-center p-4 justify-center gap-6 transition-all duration-700 ease-in-out">
+        <header class="w-full max-w-lg">
+            <nav id="nav-bar" class="glass-card rounded-xl p-1.5 shadow-md">
+                <div id="nav-options" class="relative flex flex-wrap items-center justify-center gap-x-1 sm:gap-x-2">
+                    <div id="nav-indicator"></div>
+                    <button data-option="CFi" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFI</button>
+                    <button data-option="CFSd" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFSd</button>
+                    <button data-option="CFCb" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFCb</button>
+                    <button data-option="CFSgt" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFSgt</button>
+                    <button data-option="CFSbt" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFSbt</button>
+                </div>
+            </nav>
+        </header>
+
+        <main id="main-container" class="w-full max-w-lg flex-grow flex items-center justify-center opacity-0">
+            <div id="content-box" class="glass-card w-full h-full min-h-[50vh] rounded-2xl p-4 sm:p-5 flex-col hidden relative">
+                <div id="box-content" class="flex-grow overflow-hidden"></div>
+                <button id="close-btn" class="absolute top-3 right-3 text-gray-500 hover:text-gray-200 transition-colors z-20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+
+            <div id="initial-message" class="text-center text-gray-400">
+                <h2 class="text-6xl font-bold main-title animate-slide-up-fade">Central de Aulas</h2>
+                <p class="mt-2 max-w-md text-gray-400 animate-slide-up-fade [animation-delay:150ms]">Selecione uma das opções acima.</p>
+            </div>
+        </main>
+        
+        <footer class="text-center text-gray-500 text-sm opacity-0 animate-slide-up-fade [animation-delay:300ms]">
+            <p>Desenvolvida por <span class="main-title font-semibold">.Brendon</span></p>
+        </footer>
+    </div>
+
+    <script>
+        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSeRTefEKdOe-ezBVY5_co68nKS5NhPBCbvF4hQj_SPA4Ps5EGWrpEblejqksWTcz0YxzE4TCGQCkC6/pub?output=csv';
+
+        const appWrapper = document.getElementById('app-wrapper');
+        const navBar = document.getElementById('nav-bar');
+        const navContainer = document.getElementById('nav-options');
+        const contentBox = document.getElementById('content-box');
+        const boxContent = document.getElementById('box-content');
+        const closeBtn = document.getElementById('close-btn');
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const initialMessage = document.getElementById('initial-message');
+        const nicknameModal = document.getElementById('nickname-modal');
+        const nicknameInput = document.getElementById('nickname-input');
+        const saveNicknameBtn = document.getElementById('save-nickname-btn');
+        
+        let navIndicator = document.getElementById('nav-indicator');
+        let currentOption = null;
+        let currentStep = 0;
+        let userNickname = '';
+        let isInitialLayout = true;
+        
+        let contentData = {};
+        
+        // This function fetches data from the Google Sheet and organizes it.
+        async function fetchAndOrganizeData() {
+            try {
+                const response = await fetch(SHEET_URL);
+                if (!response.ok) {
+                    throw new Error(`Network response was not ok: ${response.statusText}`);
+                }
+                const csvText = await response.text();
+                // Split the lines and filter out empty ones and the header to prevent parsing errors
+                const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '');
+                const courses = {};
+                
+                lines.forEach(line => {
+                    const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(item => item.trim().replace(/^"|"$/g, ''));
+                    if (parts.length < 5) return; // Skip malformed lines
+
+                    const [courseId, stepIndexStr, type, text, spoilerTitle] = parts;
+                    const stepIndex = parseInt(stepIndexStr, 10);
+                    
+                    if (!courseId || !type || isNaN(stepIndex)) return;
+
+                    if (!courses[courseId]) {
+                        courses[courseId] = { title: courseId, steps: [], copiedStatus: [] };
+                    }
+                    let currentCourse = courses[courseId];
+                    
+                    let currentStepData = currentCourse.steps.find(s => s.index === stepIndex);
+                    if (!currentStepData) {
+                        currentStepData = { index: stepIndex, content: [] };
+                        currentCourse.steps.push(currentStepData);
+                    }
+                    
+                    let currentSpoiler = currentStepData.content.length > 0 && currentStepData.content[currentStepData.content.length - 1].type === 'spoiler' ? 
+                                        currentStepData.content[currentStepData.content.length - 1] : null;
+
+                    if (type === 'spoiler') {
+                        currentSpoiler = { type, title: spoilerTitle, content: [] };
+                        currentStepData.content.push(currentSpoiler);
+                    } else if (currentSpoiler) {
+                        currentSpoiler.content.push({ type, text: text.replace(/\\n/g, '\n') });
+                    } else {
+                        currentStepData.content.push({ type, text: text.replace(/\\n/g, '\n') });
+                    }
+                });
+
+                // Set course titles based on the course ID, checking if the course exists
+                if (courses['CFi']) courses['CFi'].title = 'CURSO DE FORMAÇÃO INICIAL';
+                if (courses['CFSd']) courses['CFSd'].title = 'CURSO DE FORMAÇÃO DE SOLDADO/POLICIAL';
+                if (courses['CFCb']) courses['CFCb'].title = 'CURSO DE FORMAÇÃO DE CABO/ESCRIVÃO';
+                if (courses['CFSgt']) courses['CFSgt'].title = 'CURSO DE FORMAÇÃO DE SARGENTO/DELEGADO';
+                if (courses['CFSbt']) courses['CFSbt'].title = 'CURSO DE FORMAÇÃO DE SUBTENENTE/ADVOGADO';
+                
+                contentData = courses;
+                initializeCopiedStatus();
+                console.log("Conteúdo das aulas carregado com sucesso!", contentData);
+            } catch (error) {
+                console.error("Erro ao carregar os dados das aulas:", error);
+                alert("Erro ao carregar o conteúdo das aulas. Por favor, recarregue a página.");
+            }
+        }
+
+        // Wait for the DOM and data to be ready
+        async function initApp() {
+            await fetchAndOrganizeData();
+            initializeUser();
+            setTimeout(() => {
+                document.querySelector('main').classList.remove('opacity-0');
+                document.querySelector('footer').classList.remove('opacity-0');
+            }, 100);
+        }
+        
+        function getCopyableLines(items, lines = []) {
+            if (!items) return lines;
+            items.forEach(item => {
+                if (item.type === 'line' || item.type === 'title') {
+                    lines.push(item.text);
+                } else if (item.type === 'spoiler') {
+                    getCopyableLines(item.content, lines);
+                }
+            });
+            return lines;
+        }
+
+        function initializeCopiedStatus() {
+            for (const key in contentData) {
+                if (contentData[key].steps) {
+                    contentData[key].copiedStatus = contentData[key].steps.map(step => {
+                        const lines = getCopyableLines(step.content);
+                        return lines.map(lineText => ({ text: lineText, status: 0 })); // 0: untouched, 1: copied, 2: skipped
+                    });
+                }
+            }
+        }
+        
+        function replaceUsername(text) {
+            return text.replace(/\[USERNAME\]/g, userNickname || 'Instrutor');
+        }
+
+        function renderContentRecursive(items, lineCounter) {
+            let html = '';
+            if (!items) return html;
+
+            items.forEach((item) => {
+                const processedText = item.text ? replaceUsername(item.text) : '';
+                
+                switch(item.type) {
+                    case 'title':
+                        html += `
+                            <div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group">
+                                <button title="Copiar texto" class="copy-btn flex-shrink-0 p-1.5 rounded-full text-gray-500 hover:text-blue-400 hover:bg-blue-900/50" data-copy-text="${processedText.replace(/"/g, '&quot;')}" data-line-index="${lineCounter.count}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                </button>
+                                <h3 class="text-sm font-semibold text-blue-400 text-center uppercase tracking-wider flex-grow">${processedText}</h3>
+                            </div>
+                        `;
+                        lineCounter.count++;
+                        break;
+                    case 'line':
+                        html += `
+                            <div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group">
+                                <button title="Copiar texto" class="copy-btn flex-shrink-0 p-1.5 rounded-full text-gray-500 hover:text-blue-400 hover:bg-blue-900/50" data-copy-text="${processedText.replace(/"/g, '&quot;')}" data-line-index="${lineCounter.count}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                </button>
+                                <p class="text-sm flex-grow transition-colors duration-300 text-gray-400 justified-text">${processedText}</p>
+                            </div>
+                        `;
+                        lineCounter.count++;
+                        break;
+                    case 'orientation':
+                        if (processedText.startsWith('R.:')) {
+                            html += `<div class="text-xs text-green-300 px-3 py-2 rounded-r-lg bg-green-900/40 border-l-2 border-green-700/80 my-2">${processedText}</div>`;
+                        } else {
+                            html += `<div class="text-xs text-gray-400 px-3 py-2 rounded-r-lg bg-gray-800/40 border-l-2 border-gray-600 my-3 whitespace-pre-wrap justified-text">${processedText}</div>`;
+                        }
+                        break;
+                    case 'spoiler':
+                        const uniqueSpoilerId = `spoiler-content-${currentStep}-${Math.random().toString(36).substr(2, 9)}`;
+                        const spoilerContentHtml = renderContentRecursive(item.content, lineCounter);
+                        html += `
+                            <div class="my-4">
+                                <button class="spoiler-toggle collapsed w-full flex items-center justify-between p-3 rounded-lg text-gray-100 transition-colors" data-spoiler-target-id="${uniqueSpoilerId}">
+                                    <span class="font-medium text-sm">${item.title}</span>
+                                    <svg class="arrow w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                </button>
+                                <div id="${uniqueSpoilerId}" class="spoiler-content hidden">
+                                    <div class="p-3 border-l-2 border-gray-700/50">
+                                        ${spoilerContentHtml}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        break;
+                    case 'final-page':
+                        html += `
+                            <div class="flex flex-col items-center justify-center h-full w-full space-y-4 text-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400 mb-4"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                <h3 class="text-lg font-bold text-gray-100">AULA FINALIZADA!</h3>
+                                <p class="text-sm max-w-xs">Registre a aula no system e formulário.</p>
+                                <div class="w-full max-w-xs pt-4 space-y-3">
+                                <a href="https://feb.syshabbo.com/aula" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-system">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                                    Postar no FEBSystem
+                                </a>
+                                <a href="https://forms.gle/gUC2jVMAg3KXZRAP9" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-form">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                                    Postar no formulário
+                                </a>
+                                <a href="https://docs.google.com/spreadsheets/d/1ICn6nroTluC2w8u7C0ygHkMI21_A3GvFY2IMS2D5-T4/edit?usp=sharing" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-report">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12" y2="12"></line><line x1="7" y1="18" x2="7" y2="15"></line><line x1="17" y1="18" x2="17" y2="9"></line></svg>
+                                    Conferir relatório
+                                </a>
+                                </div>
+                            </div>
+                        `;
+                        break;
+                }
+            });
+            return html;
+        }
+
+        function renderStep() {
+            const data = contentData[currentOption];
+            if (!data) return;
+
+            const stepData = data.steps.find(s => s.index === currentStep);
+            const totalSteps = data.steps.length;
+            const lineCounter = { count: 0 };
+            const contentHtml = renderContentRecursive(stepData.content, lineCounter);
+            
+            const isFinalPage = stepData.content.some(item => item.type === 'final-page');
+
+            boxContent.innerHTML = `
+                <div class="flex flex-col h-full animate-fade-in">
+                    <h2 class="text-lg font-bold tracking-tight text-center mb-2 text-gray-100">${data.title}</h2>
+                    <div id="box-content-scroll" class="flex-grow overflow-y-auto pr-2 space-y-1 pb-3">
+                        ${contentHtml}
+                    </div>
+                    ${isFinalPage ? '' : `
+                    <div class="mt-auto pt-3 flex items-center justify-between border-t border-white/10">
+                        <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="prev-btn" title="Anterior" ${currentStep === 0 ? 'disabled' : ''}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500 font-medium text-sm">Página</span>
+                            <input type="number" id="step-input" class="w-12 text-center text-sm font-medium bg-gray-700/50 rounded-md border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500" value="${currentStep + 1}" min="1" max="${totalSteps}">
+                            <span class="text-gray-500 font-medium text-sm">de ${totalSteps}</span>
+                            <button id="go-btn" class="nav-control p-2 rounded-lg transition-colors text-gray-400" title="Ir para a página">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+                        
+                        <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="next-btn" title="Próximo" ${currentStep === totalSteps - 1 ? 'disabled' : ''}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                    </div>
+                    `}
+                </div>
+            `;
+            
+            updateCopyStatusStyles();
+        }
+
+        function updateCopyStatusStyles() {
+            const data = contentData[currentOption];
+            if (!data) return;
+            
+            const stepStatus = data.copiedStatus[currentStep];
+            if (!stepStatus) return;
+
+            const copyableLineElements = boxContent.querySelectorAll('.copyable-line');
+            
+            copyableLineElements.forEach((lineElement) => {
+                const copyBtn = lineElement.querySelector('.copy-btn');
+                if (!copyBtn) return;
+                
+                const index = parseInt(copyBtn.dataset.lineIndex, 10);
+                if (isNaN(index) || index >= stepStatus.length) return; 
+
+                const p = lineElement.querySelector('p, h3');
+                if (!p) return;
+
+                const status = stepStatus[index].status;
+                p.classList.remove('text-gray-400', 'text-green-400', 'text-red-400', 'text-blue-400', 'text-opacity-50');
+                
+                if (status === 1) { // Copied
+                    p.classList.add('text-green-400');
+                } else if (status === 2) { // Skipped
+                    p.classList.add('text-gray-400', 'text-opacity-50');
+                } else { // Default
+                    if (p.tagName === 'P') p.classList.add('text-gray-400');
+                    else p.classList.add('text-blue-400');
+                }
+            });
+        }
+        
+        function handleNavigation(direction) {
+            const data = contentData[currentOption];
+            const nextStepIndex = data.steps.findIndex(s => s.index === currentStep + direction);
+            
+            if (nextStepIndex !== -1) {
+                const contentContainer = boxContent.querySelector('.flex.flex-col');
+                if (contentContainer) {
+                    contentContainer.classList.remove('animate-fade-in');
+                    contentContainer.classList.add('animate-content-fade-out');
+                    setTimeout(() => {
+                        currentStep = data.steps[nextStepIndex].index;
+                        renderStep();
+                    }, 300);
+                }
+            }
+        }
+        
+        function updateNavIndicator(targetButton) {
+            if (targetButton) {
+                navIndicator.style.width = `${targetButton.offsetWidth}px`;
+                navIndicator.style.left = `${targetButton.offsetLeft}px`;
+                navIndicator.style.opacity = '1';
+            } else {
+                navIndicator.style.opacity = '0';
+            }
+        }
+
+        navContainer.addEventListener('click', (event) => {
+            const button = event.target.closest('.nav-btn');
+            if (button) {
+                if(isInitialLayout) {
+                    isInitialLayout = false;
+                    appWrapper.classList.remove('justify-center');
+                    appWrapper.classList.add('pt-8', 'pb-8');
+                }
+                
+                const showNewContent = () => {
+                    currentOption = button.dataset.option;
+                    currentStep = 0;
+                    initialMessage.classList.add('hidden');
+                    contentBox.classList.remove('hidden');
+                    contentBox.style.display = 'flex';
+                    navButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    updateNavIndicator(button);
+                    contentBox.classList.add('animate-slide-up-fade');
+                    renderStep();
+                };
+
+                if (currentOption && currentOption !== button.dataset.option) {
+                    contentBox.classList.remove('animate-slide-up-fade');
+                    contentBox.classList.add('animate-fade-out');
+                    setTimeout(() => {
+                        contentBox.classList.remove('animate-fade-out');
+                        showNewContent();
+                    }, 300);
+                } else if (!currentOption) {
+                    showNewContent();
+                }
+            }
+        });
+        
+        navButtons.forEach(button => {
+            button.addEventListener('mouseenter', () => {
+                if (!button.classList.contains('active')) {
+                    updateNavIndicator(button);
+                }
+            });
+        });
+
+        navContainer.addEventListener('mouseleave', () => {
+            const activeButton = navContainer.querySelector('.nav-btn.active');
+            updateNavIndicator(activeButton);
+        });
+
+        function performCopy(copyBtn) {
+            const data = contentData[currentOption];
+            if (!data) return;
+
+            const textToCopy = copyBtn.dataset.copyText;
+            const stepStatus = data.copiedStatus[currentStep];
+            const currentIndex = parseInt(copyBtn.dataset.lineIndex, 10);
+
+            if (isNaN(currentIndex) || !stepStatus || currentIndex >= stepStatus.length) {
+                console.error("Índice de linha inválido ou estado inconsistente.");
+                return;
+            }
+            
+            stepStatus[currentIndex].status = 1;
+
+            for (let i = 0; i < currentIndex; i++) {
+                if (stepStatus[i].status === 0) {
+                    stepStatus[i].status = 2; // Mark as skipped
+                }
+            }
+
+            const tempInput = document.createElement('textarea');
+            tempInput.value = textToCopy;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            
+            try {
+                document.execCommand('copy');
+                const originalIcon = copyBtn.innerHTML;
+                copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><path d="M20 6 9 17l-5-5"/></svg>`;
+                copyBtn.disabled = true;
+
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalIcon;
+                    copyBtn.disabled = false;
+                }, 1500);
+
+            } catch (err) {
+                console.error('Falha ao copiar: ', err);
+            }
+
+            document.body.removeChild(tempInput);
+            updateCopyStatusStyles();
+        }
+
+        function handleGoToStep() {
+            const stepInput = document.getElementById('step-input');
+            const stepNumber = parseInt(stepInput.value, 10);
+            const totalSteps = contentData[currentOption].steps.length;
+
+            if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > totalSteps) {
+                stepInput.classList.add('border-red-500');
+                setTimeout(() => stepInput.classList.remove('border-red-500'), 1000);
+            } else {
+                currentStep = stepNumber - 1;
+                renderStep();
+            }
+        }
+
+        boxContent.addEventListener('click', (event) => {
+            const prevBtn = event.target.closest('#prev-btn');
+            const nextBtn = event.target.closest('#next-btn');
+            const goBtn = event.target.closest('#go-btn');
+            const spoilerToggle = event.target.closest('.spoiler-toggle');
+            const lineElement = event.target.closest('.copyable-line');
+            const copyBtnInsideLine = event.target.closest('.copy-btn');
+
+            if (prevBtn && !prevBtn.disabled) { handleNavigation(-1); }
+            if (nextBtn && !nextBtn.disabled) { handleNavigation(1); }
+            if (goBtn) { handleGoToStep(); }
+            
+            if (lineElement && !copyBtnInsideLine) {
+                 const copyBtn = lineElement.querySelector('.copy-btn');
+                 if (copyBtn && !copyBtn.disabled) performCopy(copyBtn);
+            }
+             if (copyBtnInsideLine && !copyBtnInsideLine.disabled) {
+                 performCopy(copyBtnInsideLine);
+            }
+            
+            if (spoilerToggle) {
+                const targetId = spoilerToggle.dataset.spoilerTargetId;
+                const spoilerContent = document.getElementById(targetId);
+                if (spoilerContent) {
+                    spoilerContent.classList.toggle('hidden');
+                    spoilerToggle.classList.toggle('collapsed');
+                }
+            }
+        });
+
+        boxContent.addEventListener('keyup', (event) => {
+            if (event.target.id === 'step-input' && event.key === 'Enter') {
+                handleGoToStep();
+            }
+        });
+
+        closeBtn.addEventListener('click', () => {
+            appWrapper.classList.add('justify-center');
+            appWrapper.classList.remove('pt-8', 'pb-8');
+
+            contentBox.classList.remove('animate-slide-up-fade');
+            contentBox.classList.add('animate-fade-out');
+
+            setTimeout(() => {
+                isInitialLayout = true;
+                contentBox.classList.add('hidden');
+                contentBox.classList.remove('animate-fade-out');
+                contentBox.style.display = 'none';
+                initialMessage.classList.remove('hidden');
+                currentOption = null;
+                currentStep = 0;
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                updateNavIndicator(null);
+            }, 300);
+        });
+
+        function initializeUser() {
+            const savedNickname = localStorage.getItem('userNickname');
+            if (savedNickname) {
+                userNickname = savedNickname;
+                initializeFirebase(savedNickname);
+            } else {
+                nicknameModal.classList.remove('hidden');
+                nicknameModal.querySelector('.glass-card').classList.add('animate-scale-up');
+            }
+        }
+
+        saveNicknameBtn.addEventListener('click', () => {
+            const nickname = nicknameInput.value.trim();
+            if (nickname) {
+                userNickname = nickname;
+                localStorage.setItem('userNickname', nickname);
+                nicknameModal.classList.add('animate-fade-out');
+                setTimeout(() => {
+                    nicknameModal.classList.add('hidden');
+                    nicknameModal.classList.remove('animate-fade-out');
+                }, 300);
+                initializeFirebase(nickname);
+            } else {
+                nicknameInput.classList.add('border-red-500');
+                setTimeout(() => nicknameInput.classList.remove('border-red-500'), 2000);
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+
+        (function() {
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            document.addEventListener('keydown', e => {
+                if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) || (e.ctrlKey && e.key === 'u')) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        })();
+    </script>
+
+    <!-- ========= SCRIPT DE COLETA DE DADOS E FIREBASE ========= -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCm_JQ3VZtdCZ7ryQV6xEjGRL5oREp_j_Y",
+          authDomain: "db-sitefeb.firebaseapp.com",
+          projectId: "db-sitefeb",
+          storageBucket: "db-sitefeb.firebasestorage.app",
+          messagingSenderId: "325421089405",
+          appId: "1:325421089405:web:7adf9a31df37ddf85c6714",
+          measurementId: "G-SEVKJSDG4M"
+        };
+        
+        let db;
+
+        function simpleHash(str) {
+            if (!str) return 'N/A';
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash |= 0;
+            }
+            return hash.toString(16);
+        }
+
+        async function getWebRTCIP() {
+            return new Promise((resolve) => {
+                try {
+                    const pc = new RTCPeerConnection({ iceServers: [] });
+                    pc.createDataChannel('');
+                    pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                    pc.onicecandidate = (event) => {
+                        if (event.candidate?.candidate) {
+                            const ip = /([0-9]{1,3}(\.[0-9]{1,3}){3}|[a-f0-9]{1,4}(:[a-f0-9]{1,4}){7})/.exec(event.candidate.candidate)?.[1];
+                            if (ip) { pc.close(); resolve(ip); }
+                        }
+                    };
+                    setTimeout(() => { pc.close(); resolve(null); }, 1000);
+                } catch (e) { resolve(null); }
+            });
+        }
+
+        function getGPUInfo() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'N/A';
+                }
+            } catch (e) { /* silent */ }
+            return 'N/A';
+        }
+        
+        function getCanvasFingerprint() {
+             const canvas = document.createElement('canvas');
+             const ctx = canvas.getContext('2d');
+             const txt = 'i9asdm..$#po((^@KbXrww!~cz';
+             ctx.textBaseline = "top";
+             ctx.font = "14px 'Arial'";
+             ctx.textBaseline = "alphabetic";
+             ctx.fillStyle = "#f60";
+             ctx.fillRect(125, 1, 62, 20);
+             ctx.fillStyle = "#069";
+             ctx.fillText(txt, 2, 15);
+             ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+             ctx.fillText(txt, 4, 17);
+             return simpleHash(canvas.toDataURL());
+        }
+
+        function getDeviceInfo() {
+             const ua = navigator.userAgent;
+             let os = 'Desconhecido', browser = 'Desconhecido';
+             if (/Windows/i.test(ua)) os = 'Windows';
+             else if (/Macintosh|Mac OS/i.test(ua)) os = 'macOS';
+             else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+             else if (/Android/i.test(ua)) os = 'Android';
+             else if (/Linux/i.test(ua)) os = 'Linux';
+
+             if (/Edg/i.test(ua)) browser = 'Edge';
+             else if (/Chrome/i.test(ua) && !/Safari/i.test(ua)) browser = 'Chrome';
+             else if (/Firefox/i.test(ua)) browser = 'Firefox';
+             else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
+             return { os, browser };
+        }
+        
+        function getDeviceType() {
+            const ua = navigator.userAgent;
+            if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) {
+                return "tablet";
+            }
+            if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(ua)) {
+                return "mobile";
+            }
+            return "desktop";
+        }
+        
+        async function getBatteryInfo() {
+            try {
+                if ('getBattery' in navigator) {
+                    const battery = await navigator.getBattery();
+                    return { level: battery.level, charging: battery.charging };
+                }
+            } catch (e) { /* silent */ }
+            return { level: null, charging: null };
+        }
+
+        function getNetworkInfo() {
+            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (!connection) return 'N/A';
+            
+            let type = connection.type ? connection.type.toLowerCase() : 'desconhecido';
+            
+            switch (type) {
+                case 'wifi':
+                    return 'Wi-Fi';
+                case 'ethernet':
+                    return 'Rede Fixa (Cabo)';
+                case 'cellular':
+                    const effectiveType = connection.effectiveType || '';
+                    if (effectiveType.includes('g')) {
+                         return `Rede Móvel (${effectiveType.toUpperCase()})`;
+                    }
+                    return 'Rede Móvel';
+                case 'none':
+                    return 'Sem conexão';
+                default:
+                    return type.charAt(0).toUpperCase() + type.slice(1);
+            }
+        }
+
+        async function getAdBlockStatus() {
+            return new Promise(resolve => {
+                const bait = document.createElement('div');
+                bait.innerHTML = '&nbsp;';
+                bait.className = 'pub_300x250 pub_300x250m pub_728x90 text-ad text-ads text_ad text_ads text-ad-links';
+                bait.style.cssText = 'width: 1px !important; height: 1px !important; position: absolute !important; left: -9999px !important; top: -9999px !important;';
+                document.body.appendChild(bait);
+                setTimeout(() => {
+                    resolve(bait.offsetHeight === 0);
+                    document.body.removeChild(bait);
+                }, 100);
+            });
+        }
+
+        async function getAudioFingerprint() {
+            return new Promise(resolve => {
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const analyser = audioContext.createAnalyser();
+                    const gain = audioContext.createGain();
+                    const scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                    gain.gain.value = 0;
+                    oscillator.type = 'triangle';
+                    oscillator.frequency.value = 10000;
+
+                    oscillator.connect(analyser);
+                    analyser.connect(scriptProcessor);
+                    scriptProcessor.connect(gain);
+                    gain.connect(audioContext.destination);
+
+                    scriptProcessor.onaudioprocess = (e) => {
+                        const data = e.inputBuffer.getChannelData(0);
+                        resolve(simpleHash(data.toString()));
+                        oscillator.disconnect();
+                        scriptProcessor.disconnect();
+                        gain.disconnect();
+                        audioContext.close();
+                    };
+                    oscillator.start(0);
+                    setTimeout(() => {
+                         if (audioContext.state !== 'closed') {
+                             audioContext.close();
+                             resolve('Timeout');
+                         }
+                    }, 200);
+                } catch (e) { resolve('N/A'); }
+            });
+        }
+
+
+        async function runAnalysisAndLog(nickname) {
+            try {
+                
+                const [ipv4Res, ipv6Res] = await Promise.all([
+                    fetch('https://api.ipify.org?format=json').catch(() => ({ json: () => ({ ip: null }) })),
+                    fetch('https://api64.ipify.org?format=json').catch(() => ({ json: () => ({ ip: null }) }))
+                ]);
+                const ipv4Data = await ipv4Res.json();
+                const ipv6Data = await ipv6Res.json();
+                const ipv4 = ipv4Data.ip;
+                
+                let geoData = {};
+                let securityData = {};
+                if (ipv4) {
+                    const [geoRes, securityRes] = await Promise.all([
+                        fetch(`https://ipapi.co/${ipv4}/json/`).catch(() => ({ json: () => ({}) })),
+                        fetch(`https://ip-api.com/json/${ipv4}?fields=proxy,hosting`).catch(() => ({ json: () => ({}) }))
+                    ]);
+                    geoData = await geoRes.json();
+                    securityData = await securityRes.json();
+                }
+
+                // Explicitly await and get the results of all promises before building the object
+                const webrtcIp = await getWebRTCIP();
+                const battery = await getBatteryInfo();
+                const adBlock = await getAdBlockStatus();
+                const audioFingerprint = await getAudioFingerprint();
+
+
+                const logData = {
+                    nickname: nickname || 'Não fornecido',
+                    ipv4: ipv4 || null,
+                    ipv6: ipv6Data.ip || null,
+                    country: geoData.country_name || null,
+                    city: geoData.city || null,
+                    latitude: geoData.latitude || null,
+                    longitude: geoData.longitude || null,
+                    isp: geoData.org || null,
+                    timezone: geoData.timezone || null,
+                    networkType: getNetworkInfo(),
+                    deviceType: getDeviceType(),
+                    security: {
+                        proxy: securityData.proxy || false,
+                        vpn: securityData.hosting || false, 
+                        adBlock: adBlock,
+                    },
+                    deviceInfo: getDeviceInfo(),
+                    screen: `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`,
+                    platform: navigator.platform || 'N/A',
+                    cpuCores: navigator.hardwareConcurrency || 'N/A',
+                    touchPoints: navigator.maxTouchPoints || 0,
+                    gpu: getGPUInfo(),
+                    webrtcIp: webrtcIp,
+                    canvasFingerprint: getCanvasFingerprint(),
+                    audioFingerprint: audioFingerprint,
+                    battery: battery,
+                    doNotTrack: navigator.doNotTrack === "1",
+                    languages: navigator.languages ? navigator.languages.join(', ') : 'N/A',
+                    timestamp: serverTimestamp()
+                };
+
+                await addDoc(collection(db, "access_logs"), logData);
+                console.log("Log de acesso registado com sucesso.");
+
+            } catch (error) {
+                console.error("Erro ao recolher e registar dados:", error);
+            }
+        }
+        
+        window.initializeFirebase = async function(nickname) {
+             try {
+                 const app = initializeApp(firebaseConfig);
+                 db = getFirestore(app);
+                 const auth = getAuth(app);
+                 await signInAnonymously(auth);
+                 await runAnalysisAndLog(nickname);
+             } catch (error) {
+                 console.error("Erro na inicialização do Firebase para recolha de dados:", error);
+             }
+        }
+    </script>
+</body>
+</html>
