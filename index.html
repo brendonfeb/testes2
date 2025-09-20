@@ -411,64 +411,60 @@
 
                 const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '');
                 const courses = {};
-                
+
+                const linesByCourse = {};
                 lines.forEach(line => {
                     const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(item => item.trim().replace(/^"|"$/g, ''));
-                    if (parts.length < 5) return;
-
-                    const [courseId, stepIndexStr, type, text, spoilerTitle] = parts;
-                    const stepIndex = parseInt(stepIndexStr, 10);
-                    
-                    if (!courseId || !type || isNaN(stepIndex)) return;
-
-                    if (!courses[courseId]) {
-                        courses[courseId] = { title: courseId, steps: [] };
+                    if (parts.length < 4) return;
+                    const [courseId] = parts;
+                    if (!courseId) return;
+                    if (!linesByCourse[courseId]) {
+                        linesByCourse[courseId] = [];
                     }
-                    const currentCourse = courses[courseId];
-                    
-                    let currentStepData = currentCourse.steps.find(s => s.index === stepIndex);
-                    if (!currentStepData) {
-                        currentStepData = { index: stepIndex, content: [] };
-                        currentCourse.steps.push(currentStepData);
-                    }
-                    
-                    let stack = [currentStepData.content];
-                    
-                    // Rebuild stack from previous lines to find current nesting level
-                    let previousLines = lines.slice(0, lines.indexOf(line));
-                    previousLines.forEach(prevLine => {
-                        const [prevCourseId, prevStepIndexStr, prevType] = prevLine.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(item => item.trim().replace(/^"|"$/g, ''));
-                        const prevStepIndex = parseInt(prevStepIndexStr, 10);
-                        if (prevCourseId === courseId && prevStepIndex === stepIndex) {
-                            if (prevType === 'spoiler1' || prevType === 'spoiler3') {
-                                let lastItem = stack[stack.length - 1][stack[stack.length - 1].length - 1];
-                                if (lastItem && lastItem.type === prevType) {
-                                     stack.push(lastItem.content);
-                                }
-                            } else if (prevType === 'spoiler2' || prevType === 'spoiler4') {
+                    linesByCourse[courseId].push(parts);
+                });
+
+                for (const courseId in linesByCourse) {
+                    courses[courseId] = { title: courseId, steps: [] };
+                    const courseLines = linesByCourse[courseId];
+                    let currentStepData = null;
+                    let stack = [];
+
+                    courseLines.forEach(parts => {
+                        const [, stepIndexStr, type, text, spoilerTitle] = parts;
+                        const stepIndex = parseInt(stepIndexStr, 10);
+
+                        if (!type || isNaN(stepIndex)) return;
+
+                        if (!currentStepData || currentStepData.index !== stepIndex) {
+                            currentStepData = courses[courseId].steps.find(s => s.index === stepIndex);
+                            if (!currentStepData) {
+                                currentStepData = { index: stepIndex, content: [] };
+                                courses[courseId].steps.push(currentStepData);
+                            }
+                            stack = [currentStepData.content];
+                        }
+
+                        let targetArray = stack[stack.length - 1];
+                        const newItem = { type, text: text ? text.replace(/\\n/g, '\n') : '' };
+
+                        if (type === 'spoiler1' || type === 'spoiler3') {
+                            newItem.title = spoilerTitle;
+                            newItem.content = [];
+                            targetArray.push(newItem);
+                            stack.push(newItem.content);
+                        } else if (type === 'spoiler2' || type === 'spoiler4') {
+                            if (stack.length > 1) {
                                 stack.pop();
                             }
+                        } else {
+                            targetArray.push(newItem);
                         }
                     });
 
-                    // Process current line
-                    let targetArray = stack[stack.length - 1];
-                    
-                    const newItem = { type, text: text ? text.replace(/\\n/g, '\n') : '' };
+                    courses[courseId].steps.sort((a, b) => a.index - b.index);
+                }
 
-                    if (type === 'spoiler1' || type === 'spoiler3') {
-                        newItem.title = spoilerTitle;
-                        newItem.content = [];
-                        targetArray.push(newItem);
-                        stack.push(newItem.content); // Push new spoiler onto stack
-                    } else if (type === 'spoiler2' || type === 'spoiler4') {
-                        if (stack.length > 1) {
-                            stack.pop(); // Pop current spoiler
-                        }
-                    } else {
-                        targetArray.push(newItem);
-                    }
-                });
 
                 if (courses['CFi']) courses['CFi'].title = 'CURSO DE FORMAÇÃO INICIAL';
                 if (courses['CFSd']) courses['CFSd'].title = 'CURSO DE FORMAÇÃO DE SOLDADO/POLICIAL';
@@ -481,7 +477,8 @@
                 console.log("Conteúdo das aulas carregado com sucesso!", contentData);
             } catch (error) {
                 console.error("Erro ao carregar os dados das aulas:", error);
-                alert("Erro ao carregar o conteúdo das aulas. Por favor, recarregue a página.");
+                // Avoid using alert() in production apps. Using a custom modal would be better.
+                boxContent.innerHTML = `<div class="text-center text-red-400 p-4">Erro ao carregar o conteúdo das aulas. Por favor, recarregue a página.</div>`;
             } finally {
                  loaderOverlay.classList.remove('active');
             }
@@ -546,9 +543,9 @@
                     case 'orientation':
                         if (item.type === 'orientation') {
                              if (processedText.startsWith('R.:')) {
-                                 html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-green-300 flex-grow px-3 py-2 rounded-r-lg bg-green-900/40 border-l-2 border-green-700/80 my-2">${processedText}</p></div>`;
+                                  html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-green-300 flex-grow px-3 py-2 rounded-r-lg bg-green-900/40 border-l-2 border-green-700/80 my-2">${processedText}</p></div>`;
                              } else {
-                                 html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-gray-400 flex-grow px-3 py-2 rounded-r-lg bg-gray-800/40 border-l-2 border-gray-600 my-3 whitespace-pre-wrap justified-text">${processedText}</p></div>`;
+                                  html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-gray-400 flex-grow px-3 py-2 rounded-r-lg bg-gray-800/40 border-l-2 border-gray-600 my-3 whitespace-pre-wrap justified-text">${processedText}</p></div>`;
                              }
                         } else {
                             html += `
@@ -581,21 +578,30 @@
                         `;
                         break;
                     case 'final-page':
+                        const defaultLinks = [
+                            'https://feb.syshabbo.com/aula',
+                            'https://forms.gle/gUC2jVMAg3KXZRAP9',
+                            'https://docs.google.com/spreadsheets/d/1ICn6nroTluC2w8u7C0ygHkMI21_A3GvFY2IMS2D5-T4/edit?usp=sharing'
+                        ];
+                        
+                        const links = item.text && item.text.split('|').length === 3 ? item.text.split('|') : defaultLinks;
+                        const [systemLink, formLink, reportLink] = links;
+
                         html += `
                             <div class="flex flex-col items-center justify-center h-full w-full space-y-4 text-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400 mb-4"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                                 <h3 class="text-lg font-bold text-gray-100">AULA FINALIZADA!</h3>
                                 <p class="text-sm max-w-xs">Registre a aula no system e formulário.</p>
                                 <div class="w-full max-w-xs pt-4 space-y-3">
-                                <a href="https://feb.syshabbo.com/aula" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-system">
+                                <a href="${systemLink}" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-system">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
                                     Postar no FEBSystem
                                 </a>
-                                <a href="https://forms.gle/gUC2jVMAg3KXZRAP9" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-form">
+                                <a href="${formLink}" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-form">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
                                     Postar no formulário
                                 </a>
-                                <a href="https://docs.google.com/spreadsheets/d/1ICn6nroTluC2w8u7C0ygHkMI21_A3GvFY2IMS2D5-T4/edit?usp=sharing" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-report">
+                                <a href="${reportLink}" target="_blank" class="flex items-center justify-center p-3 w-full final-page-button btn-report">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12" y2="12"></line><line x1="7" y1="18" x2="7" y2="15"></line><line x1="17" y1="18" x2="17" y2="9"></line></svg>
                                     Conferir relatório
                                 </a>
@@ -610,9 +616,17 @@
 
         function renderStep() {
             const data = contentData[currentOption];
-            if (!data) return;
+            if (!data || !data.steps || data.steps.length === 0) {
+                 boxContent.innerHTML = `<div class="text-center text-gray-400 p-4">Nenhum conteúdo disponível para esta opção.</div>`;
+                return;
+            }
 
             const stepData = data.steps.find(s => s.index === currentStep);
+             if (!stepData) {
+                console.error(`Passo ${currentStep} não encontrado para ${currentOption}`);
+                boxContent.innerHTML = `<div class="text-center text-gray-400 p-4">Página não encontrada.</div>`;
+                return;
+            }
             const totalSteps = data.steps.length;
             const lineCounter = { count: 0 };
             const contentHtml = renderContentRecursive(stepData.content, lineCounter);
@@ -653,7 +667,7 @@
 
         function updateCopyStatusStyles() {
             const data = contentData[currentOption];
-            if (!data) return;
+            if (!data || !data.copiedStatus) return;
             
             const stepStatus = data.copiedStatus[currentStep];
             if (!stepStatus) return;
@@ -686,15 +700,17 @@
         
         function handleNavigation(direction) {
             const data = contentData[currentOption];
-            const nextStepIndex = data.steps.findIndex(s => s.index === currentStep + direction);
-            
-            if (nextStepIndex !== -1) {
+            const currentStepInfo = data.steps.find(s => s.index === currentStep);
+            const currentOrderIndex = data.steps.indexOf(currentStepInfo);
+            const nextOrderIndex = currentOrderIndex + direction;
+
+            if (nextOrderIndex >= 0 && nextOrderIndex < data.steps.length) {
                 const contentContainer = boxContent.querySelector('.flex.flex-col');
                 if (contentContainer) {
                     contentContainer.classList.remove('animate-fade-in');
                     contentContainer.classList.add('animate-content-fade-out');
                     setTimeout(() => {
-                        currentStep = data.steps[nextStepIndex].index;
+                        currentStep = data.steps[nextOrderIndex].index;
                         renderStep();
                     }, 300);
                 }
@@ -722,7 +738,7 @@
                 
                 const showNewContent = () => {
                     currentOption = button.dataset.option;
-                    currentStep = 0;
+                    currentStep = 0; // Reset to first step of the new course
                     initialMessage.classList.add('hidden');
                     contentBox.classList.remove('hidden');
                     contentBox.style.display = 'flex';
@@ -924,13 +940,13 @@
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
-          apiKey: "AIzaSyCm_JQ3VZtdCZ7ryQV6xEjGRL5oREp_j_Y",
-          authDomain: "db-sitefeb.firebaseapp.com",
-          projectId: "db-sitefeb",
-          storageBucket: "db-sitefeb.firebasestorage.app",
-          messagingSenderId: "325421089405",
-          appId: "1:325421089405:web:7adf9a31df37ddf85c6714",
-          measurementId: "G-SEVKJSDG4M"
+         apiKey: "AIzaSyCm_JQ3VZtdCZ7ryQV6xEjGRL5oREp_j_Y",
+         authDomain: "db-sitefeb.firebaseapp.com",
+         projectId: "db-sitefeb",
+         storageBucket: "db-sitefeb.firebasestorage.app",
+         messagingSenderId: "325421089405",
+         appId: "1:325421089405:web:7adf9a31df37ddf85c6714",
+         measurementId: "G-SEVKJSDG4M"
         };
         
         let db;
@@ -992,19 +1008,19 @@
         }
 
         function getDeviceInfo() {
-             const ua = navigator.userAgent;
-             let os = 'Desconhecido', browser = 'Desconhecido';
-             if (/Windows/i.test(ua)) os = 'Windows';
-             else if (/Macintosh|Mac OS/i.test(ua)) os = 'macOS';
-             else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
-             else if (/Android/i.test(ua)) os = 'Android';
-             else if (/Linux/i.test(ua)) os = 'Linux';
+              const ua = navigator.userAgent;
+              let os = 'Desconhecido', browser = 'Desconhecido';
+              if (/Windows/i.test(ua)) os = 'Windows';
+              else if (/Macintosh|Mac OS/i.test(ua)) os = 'macOS';
+              else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+              else if (/Android/i.test(ua)) os = 'Android';
+              else if (/Linux/i.test(ua)) os = 'Linux';
 
-             if (/Edg/i.test(ua)) browser = 'Edge';
-             else if (/Chrome/i.test(ua) && !/Safari/i.test(ua)) browser = 'Chrome';
-             else if (/Firefox/i.test(ua)) browser = 'Firefox';
-             else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
-             return { os, browser };
+              if (/Edg/i.test(ua)) browser = 'Edge';
+              else if (/Chrome/i.test(ua) && !/Safari/i.test(ua)) browser = 'Chrome';
+              else if (/Firefox/i.test(ua)) browser = 'Firefox';
+              else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
+              return { os, browser };
         }
         
         function getDeviceType() {
@@ -1095,8 +1111,8 @@
                     oscillator.start(0);
                     setTimeout(() => {
                          if (audioContext.state !== 'closed') {
-                             audioContext.close();
-                             resolve('Timeout');
+                              audioContext.close();
+                              resolve('Timeout');
                          }
                     }, 200);
                 } catch (e) { resolve('N/A'); }
@@ -1173,15 +1189,15 @@
         }
         
         window.initializeFirebase = async function(nickname) {
-             try {
-                 const app = initializeApp(firebaseConfig);
-                 db = getFirestore(app);
-                 const auth = getAuth(app);
-                 await signInAnonymously(auth);
-                 await runAnalysisAndLog(nickname);
-             } catch (error) {
-                 console.error("Erro na inicialização do Firebase para recolha de dados:", error);
-             }
+              try {
+                  const app = initializeApp(firebaseConfig);
+                  db = getFirestore(app);
+                  const auth = getAuth(app);
+                  await signInAnonymously(auth);
+                  await runAnalysisAndLog(nickname);
+              } catch (error) {
+                  console.error("Erro na inicialização do Firebase para recolha de dados:", error);
+              }
         }
     </script>
 </body>
