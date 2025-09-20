@@ -334,11 +334,11 @@
     <script>
         const SPREADSHEET_ID = '2PACX-1vSeRTefEKdOe-ezBVY5_co68nKS5NhPBCbvF4hQj_SPA4Ps5EGWrpEblejqksWTcz0YxzE4TCGQCkC6';
         const sheetGids = {
-            'CFI': '774590701', // GID da primeira página (geralmente 0)
-            'CFSd': '33705172', // Substituir com o GID real
-            'CFCb': '415282992', // Substituir com o GID real
-            'CFSgt': '1268101210', // Substituir com o GID real
-            'CFSbt': '1797899632', // Substituir com o GID real
+            'CFI': '774590701',
+            'CFSd': '33705172',
+            'CFCb': '415282992',
+            'CFSgt': '1268101210',
+            'CFSbt': '1797899632',
         };
 
         const appWrapper = document.getElementById('app-wrapper');
@@ -392,7 +392,8 @@
                 }
                 lastFetchedCSVCache[courseId] = csvText;
 
-                const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '');
+                // FIX: Filter out lines that are completely empty or just contain commas
+                const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '' && line.replace(/,/g, '').trim() !== '');
                 const courseData = { title: contentData[courseId]?.title || courseId, steps: [] };
                 let currentStepData = null;
                 let stack = [];
@@ -454,7 +455,6 @@
         async function initApp() {
             initializeUser();
             loaderOverlay.classList.add('active');
-            // Simulate initial loading for aesthetics even if there's no fetch
             let progress = 0;
             const interval = setInterval(() => {
                 progress += 20;
@@ -474,7 +474,7 @@
                 if (currentOption && !isFetching) {
                     fetchAndOrganizeData(currentOption, true);
                 }
-            }, 10000); // Check for updates every 10 seconds
+            }, 10000);
         }
         
         function getCopyableLines(items, lines = []) {
@@ -525,11 +525,11 @@
                     case 'line':
                     case 'orientation':
                         if (item.type === 'orientation') {
-                             if (processedText.startsWith('R.:')) {
-                                  html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-green-300 flex-grow px-3 py-2 rounded-r-lg bg-green-900/40 border-l-2 border-green-700/80 my-2">${processedText}</p></div>`;
-                             } else {
-                                  html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-gray-400 flex-grow px-3 py-2 rounded-r-lg bg-gray-800/40 border-l-2 border-gray-600 my-3 whitespace-pre-wrap justified-text">${processedText}</p></div>`;
-                             }
+                                if (processedText.startsWith('R.:')) {
+                                    html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-green-300 flex-grow px-3 py-2 rounded-r-lg bg-green-900/40 border-l-2 border-green-700/80 my-2">${processedText}</p></div>`;
+                                } else {
+                                    html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-gray-400 flex-grow px-3 py-2 rounded-r-lg bg-gray-800/40 border-l-2 border-gray-600 my-3 whitespace-pre-wrap justified-text">${processedText}</p></div>`;
+                                }
                         } else {
                             html += `
                                 <div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group">
@@ -604,12 +604,19 @@
                 return;
             }
 
-            const stepData = data.steps.find(s => s.index === currentStep);
-             if (!stepData) {
-                currentStep = data.steps[0].index; // Fallback para o primeiro passo
-                renderStep();
-                return;
+            // FIX: More robust logic to find the current step.
+            // If the currentStep doesn't exist, it defaults to the first available step.
+            let stepData = data.steps.find(s => s.index === currentStep);
+            if (!stepData) {
+                currentStep = data.steps[0].index;
+                stepData = data.steps[0];
             }
+            
+            if (!stepData) { // Final safety check
+                 boxContent.innerHTML = `<div class="text-center text-red-400 p-4 animate-fade-in">Erro fatal: Não foi possível carregar os dados da página.</div>`;
+                 return;
+            }
+
             const totalSteps = data.steps.length;
             const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
             const lineCounter = { count: 0 };
@@ -733,8 +740,8 @@
                     if (!contentData[option]) {
                         await fetchAndOrganizeData(option);
                     }
-                    if (contentData[option]) { // Check if data was fetched successfully
-                        currentStep = contentData[option].steps[0]?.index || 0;
+                    if (contentData[option] && contentData[option].steps.length > 0) {
+                        currentStep = contentData[option].steps[0].index;
                     }
                     renderStep();
                 };
@@ -1010,19 +1017,19 @@
         }
 
         function getDeviceInfo() {
-              const ua = navigator.userAgent;
-              let os = 'Desconhecido', browser = 'Desconhecido';
-              if (/Windows/i.test(ua)) os = 'Windows';
-              else if (/Macintosh|Mac OS/i.test(ua)) os = 'macOS';
-              else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
-              else if (/Android/i.test(ua)) os = 'Android';
-              else if (/Linux/i.test(ua)) os = 'Linux';
+             const ua = navigator.userAgent;
+             let os = 'Desconhecido', browser = 'Desconhecido';
+             if (/Windows/i.test(ua)) os = 'Windows';
+             else if (/Macintosh|Mac OS/i.test(ua)) os = 'macOS';
+             else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+             else if (/Android/i.test(ua)) os = 'Android';
+             else if (/Linux/i.test(ua)) os = 'Linux';
 
-              if (/Edg/i.test(ua)) browser = 'Edge';
-              else if (/Chrome/i.test(ua) && !/Safari/i.test(ua)) browser = 'Chrome';
-              else if (/Firefox/i.test(ua)) browser = 'Firefox';
-              else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
-              return { os, browser };
+             if (/Edg/i.test(ua)) browser = 'Edge';
+             else if (/Chrome/i.test(ua) && !/Safari/i.test(ua)) browser = 'Chrome';
+             else if (/Firefox/i.test(ua)) browser = 'Firefox';
+             else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
+             return { os, browser };
         }
         
         function getDeviceType() {
@@ -1060,7 +1067,7 @@
                 case 'cellular':
                     const effectiveType = connection.effectiveType || '';
                     if (effectiveType.includes('g')) {
-                         return `Rede Móvel (${effectiveType.toUpperCase()})`;
+                        return `Rede Móvel (${effectiveType.toUpperCase()})`;
                     }
                     return 'Rede Móvel';
                 case 'none':
@@ -1113,8 +1120,8 @@
                     oscillator.start(0);
                     setTimeout(() => {
                          if (audioContext.state !== 'closed') {
-                              audioContext.close();
-                              resolve('Timeout');
+                             audioContext.close();
+                             resolve('Timeout');
                          }
                     }, 200);
                 } catch (e) { resolve('N/A'); }
@@ -1190,18 +1197,18 @@
             }
         }
         
+        // FIX: Expose initializeFirebase to the global window object
         window.initializeFirebase = async function(nickname) {
-              try {
-                  const app = initializeApp(firebaseConfig);
-                  db = getFirestore(app);
-                  const auth = getAuth(app);
-                  await signInAnonymously(auth);
-                  await runAnalysisAndLog(nickname);
-              } catch (error) {
-                  console.error("Erro na inicialização do Firebase para recolha de dados:", error);
-              }
+             try {
+                 const app = initializeApp(firebaseConfig);
+                 db = getFirestore(app);
+                 const auth = getAuth(app);
+                 await signInAnonymously(auth);
+                 await runAnalysisAndLog(nickname);
+             } catch (error) {
+                 console.error("Erro na inicialização do Firebase para recolha de dados:", error);
+             }
         }
     </script>
 </body>
 </html>
-
