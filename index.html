@@ -114,8 +114,8 @@
             z-index: 10;
             opacity: 0;
         }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(10px); } }
         @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes slideUpFade { from { transform: translateY(25px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         
@@ -136,8 +136,8 @@
         }
         .animate-scale-up { animation: scaleUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
         .animate-slide-up-fade { animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        .animate-fade-out { animation: fadeOut 0.4s ease-in forwards; }
+        .animate-fade-in { animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        .animate-fade-out { animation: fadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
         .animate-content-fade-out { animation: contentFadeOut 0.3s ease-out forwards; }
         
         main, footer { transition: opacity 0.7s ease; }
@@ -198,21 +198,22 @@
         .spoiler-content {
             display: grid;
             grid-template-rows: 0fr;
-            background-color: var(--card-bg-darker);
-            border-radius: 0.5rem;
-            transition: grid-template-rows 0.5s cubic-bezier(0.4, 0, 0.2, 1), margin-top 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: grid-template-rows 0.5s cubic-bezier(0.25, 1, 0.5, 1);
         }
-        .spoiler-content:not(.hidden) {
+        .spoiler-content.open {
             grid-template-rows: 1fr;
-            margin-top: 0.5rem;
         }
         .spoiler-content > div {
             overflow: hidden;
             opacity: 0;
-            transition: opacity 0.3s ease 0.2s;
+            transform: translateY(-10px);
+            transition: opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s;
+            pointer-events: none; /* Impede cliques no conteúdo oculto */
         }
-        .spoiler-content:not(.hidden) > div {
+        .spoiler-content.open > div {
             opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto; /* Permite cliques quando visível */
         }
         .spoiler-toggle .arrow {
             transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
@@ -238,6 +239,17 @@
         .btn-system:hover { box-shadow: 0 10px 25px var(--accent-blue-shadow); }
         
         .justified-text { text-align: justify; }
+        
+        .orientation-box {
+            background-color: var(--card-bg-darker);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 0.75rem 0;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
 
         #loader-overlay {
             position: fixed;
@@ -357,7 +369,7 @@
         
         let navIndicator = document.getElementById('nav-indicator');
         let currentOption = null;
-        let currentStep = 0;
+        let currentOrderIndex = 0;
         let userNickname = '';
         let isInitialLayout = true;
         let lastFetchedCSVCache = {};
@@ -392,7 +404,6 @@
                 }
                 lastFetchedCSVCache[courseId] = csvText;
 
-                // FIX: Filter out lines that are completely empty or just contain commas
                 const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '' && line.replace(/,/g, '').trim() !== '');
                 const courseData = { title: contentData[courseId]?.title || courseId, steps: [] };
                 let currentStepData = null;
@@ -429,6 +440,11 @@
                     }
                 });
                 courseData.steps.sort((a, b) => a.index - b.index);
+
+                const orientationText = `<center><strong>ORIENTAÇÕES</strong></center><br><strong>Campos cinzas:</strong> orientações direcionadas exclusivamente aos instrutores (não devem ser repassadas aos alunos).<br><br><strong>Títulos em azul:</strong> tópicos da instrução.<br><br><strong>Campos verdes:</strong> respostas das questões.<br><br>Copie o(s) nickname(s) do(s) policial(is) presente(s) pelo sussurro, bem como o horário de início e fim da aula.<br><br>Ao instrutor(a) responsável que omitir ou pular o script da aula, será punido(a) conforme o Código Penal Militar.`;
+                
+                const orientationStep = { index: 0, content: [{ type: 'orientation', text: orientationText }] };
+                courseData.steps.unshift(orientationStep);
 
                 const titles = {
                     'CFI': 'CURSO DE FORMAÇÃO INICIAL', 'CFSd': 'CURSO DE FORMAÇÃO DE SOLDADO/POLICIAL', 'CFCb': 'CURSO DE FORMAÇÃO DE CABO/ESCRIVÃO',
@@ -523,37 +539,35 @@
                         lineCounter.count++;
                         break;
                     case 'line':
-                    case 'orientation':
-                        if (item.type === 'orientation') {
-                                if (processedText.startsWith('R.:')) {
-                                    html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-green-300 flex-grow px-3 py-2 rounded-r-lg bg-green-900/40 border-l-2 border-green-700/80 my-2">${processedText}</p></div>`;
-                                } else {
-                                    html += `<div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group"><p class="text-xs text-gray-400 flex-grow px-3 py-2 rounded-r-lg bg-gray-800/40 border-l-2 border-gray-600 my-3 whitespace-pre-wrap justified-text">${processedText}</p></div>`;
-                                }
-                        } else {
-                            html += `
-                                <div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group">
-                                    <button title="Copiar texto" class="copy-btn flex-shrink-0 p-1.5 rounded-full text-gray-500 hover:text-blue-400 hover:bg-blue-900/50" data-copy-text="${processedText.replace(/"/g, '&quot;')}" data-line-index="${lineCounter.count}">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                    </button>
-                                    <p class="text-sm flex-grow transition-colors duration-300 text-gray-400 justified-text">${processedText}</p>
-                                </div>
-                            `;
-                        }
+                        html += `
+                            <div class="copyable-line w-full p-1.5 rounded-lg flex items-center gap-3 cursor-pointer group">
+                                <button title="Copiar texto" class="copy-btn flex-shrink-0 p-1.5 rounded-full text-gray-500 hover:text-blue-400 hover:bg-blue-900/50" data-copy-text="${processedText.replace(/"/g, '&quot;')}" data-line-index="${lineCounter.count}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                </button>
+                                <p class="text-sm flex-grow transition-colors duration-300 text-gray-400 justified-text">${processedText}</p>
+                            </div>
+                        `;
                         lineCounter.count++;
+                        break;
+                    case 'orientation':
+                        if (processedText.startsWith('R.:')) {
+                            html += `<div class="w-full p-1.5 rounded-lg flex items-center gap-3"><p class="text-xs text-green-300 flex-grow px-3 py-2 rounded-r-lg bg-green-900/40 border-l-2 border-green-700/80 my-2">${processedText}</p></div>`;
+                        } else {
+                            html += `<div class="orientation-box">${processedText}</div>`;
+                        }
                         break;
                     case 'spoiler1':
                     case 'spoiler3':
-                        const uniqueSpoilerId = `spoiler-content-${currentStep}-${Math.random().toString(36).substr(2, 9)}`;
+                        const uniqueSpoilerId = `spoiler-content-${currentOrderIndex}-${Math.random().toString(36).substr(2, 9)}`;
                         const spoilerContentHtml = renderContentRecursive(item.content, lineCounter);
                         html += `
-                            <div class="my-4">
-                                <button class="spoiler-toggle collapsed w-full flex items-center justify-between p-3 rounded-lg text-gray-100 transition-colors" data-spoiler-target-id="${uniqueSpoilerId}">
+                            <div>
+                                <button class="spoiler-toggle collapsed w-full flex items-center justify-between py-2 px-3 rounded-lg text-gray-100 transition-colors" data-spoiler-target-id="${uniqueSpoilerId}">
                                     <span class="font-medium text-sm">${item.title}</span>
-                                    <svg class="arrow w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    <svg class="arrow w-6 h-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                                 </button>
-                                <div id="${uniqueSpoilerId}" class="spoiler-content hidden">
-                                    <div class="p-3 border-l-2 border-gray-700/50">
+                                <div id="${uniqueSpoilerId}" class="spoiler-content">
+                                    <div class="p-1 border-l-2 border-gray-700/50">
                                         ${spoilerContentHtml}
                                     </div>
                                 </div>
@@ -604,21 +618,15 @@
                 return;
             }
 
-            // FIX: More robust logic to find the current step.
-            // If the currentStep doesn't exist, it defaults to the first available step.
-            let stepData = data.steps.find(s => s.index === currentStep);
+            const stepData = data.steps[currentOrderIndex];
             if (!stepData) {
-                currentStep = data.steps[0].index;
-                stepData = data.steps[0];
-            }
-            
-            if (!stepData) { // Final safety check
-                 boxContent.innerHTML = `<div class="text-center text-red-400 p-4 animate-fade-in">Erro fatal: Não foi possível carregar os dados da página.</div>`;
+                 console.error("Invalid currentOrderIndex:", currentOrderIndex);
+                 currentOrderIndex = 0;
+                 renderStep();
                  return;
             }
-
+            
             const totalSteps = data.steps.length;
-            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
             const lineCounter = { count: 0 };
             const contentHtml = renderContentRecursive(stepData.content, lineCounter);
             
@@ -660,9 +668,8 @@
             const data = contentData[currentOption];
             if (!data || !data.copiedStatus || !data.steps) return;
             
-            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
-            if (currentOrderIndex === -1) return;
-
+            if (currentOrderIndex < 0 || currentOrderIndex >= data.copiedStatus.length) return;
+            
             const stepStatus = data.copiedStatus[currentOrderIndex];
             if (!stepStatus) return;
 
@@ -694,12 +701,12 @@
         
         function handleNavigation(direction) {
             const data = contentData[currentOption];
-            const currentStepInfo = data.steps.find(s => s.index === currentStep);
-            const currentOrderIndex = data.steps.indexOf(currentStepInfo);
+            if (!data || !data.steps) return;
+
             const nextOrderIndex = currentOrderIndex + direction;
 
             if (nextOrderIndex >= 0 && nextOrderIndex < data.steps.length) {
-                currentStep = data.steps[nextOrderIndex].index;
+                currentOrderIndex = nextOrderIndex;
                 renderStep();
             }
         }
@@ -725,7 +732,7 @@
                 
                 const showNewContent = async (option) => {
                     currentOption = option;
-                    currentStep = 0; 
+                    currentOrderIndex = 0;
                     
                     navButtons.forEach(btn => btn.classList.remove('active'));
                     button.classList.add('active');
@@ -739,9 +746,6 @@
                     
                     if (!contentData[option]) {
                         await fetchAndOrganizeData(option);
-                    }
-                    if (contentData[option] && contentData[option].steps.length > 0) {
-                        currentStep = contentData[option].steps[0].index;
                     }
                     renderStep();
                 };
@@ -777,7 +781,6 @@
             if (!data) return;
 
             const textToCopy = copyBtn.dataset.copyText;
-            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
             const stepStatus = data.copiedStatus[currentOrderIndex];
             const currentIndex = parseInt(copyBtn.dataset.lineIndex, 10);
 
@@ -825,8 +828,6 @@
             if (!data || !data.steps) return;
             const totalSteps = data.steps.length;
 
-            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
-
             if (isNaN(pageNumber) || pageNumber < 1 || pageNumber > totalSteps) {
                 stepInput.classList.add('border-red-500');
                 setTimeout(() => stepInput.classList.remove('border-red-500'), 1000);
@@ -835,10 +836,9 @@
             } 
             
             const targetOrderIndex = pageNumber - 1;
-            const targetStep = data.steps[targetOrderIndex].index;
 
-            if (targetStep !== currentStep) {
-                currentStep = targetStep;
+            if (targetOrderIndex !== currentOrderIndex) {
+                currentOrderIndex = targetOrderIndex;
                 renderStep();
             }
         }
@@ -867,7 +867,7 @@
                 const targetId = spoilerToggle.dataset.spoilerTargetId;
                 const spoilerContent = document.getElementById(targetId);
                 if (spoilerContent) {
-                    spoilerContent.classList.toggle('hidden');
+                    spoilerContent.classList.toggle('open');
                     spoilerToggle.classList.toggle('collapsed');
                 }
             }
@@ -893,7 +893,7 @@
                 contentBox.style.display = 'none';
                 initialMessage.classList.remove('hidden');
                 currentOption = null;
-                currentStep = 0;
+                currentOrderIndex = 0;
                 navButtons.forEach(btn => btn.classList.remove('active'));
                 updateNavIndicator(null);
             }, 300);
@@ -1197,7 +1197,6 @@
             }
         }
         
-        // FIX: Expose initializeFirebase to the global window object
         window.initializeFirebase = async function(nickname) {
              try {
                  const app = initializeApp(firebaseConfig);
@@ -1212,3 +1211,4 @@
     </script>
 </body>
 </html>
+
