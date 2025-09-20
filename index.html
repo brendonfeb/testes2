@@ -343,26 +343,26 @@
                     
                     const parentStack = [currentStepData.content];
                     
-                    // Encontrar o array de conteúdo mais aninhado para o passo atual
+                    // Traverse down the stack to the deepest spoiler content array
                     let lastItem;
                     do {
                         lastItem = parentStack[parentStack.length - 1][parentStack[parentStack.length - 1].length - 1];
-                        if (lastItem && lastItem.type === 'spoiler') {
+                        if (lastItem && lastItem.type.startsWith('spoiler') && !lastItem.type.endsWith('end')) {
                             parentStack.push(lastItem.content);
                         }
-                    } while (lastItem && lastItem.type === 'spoiler');
+                    } while (lastItem && lastItem.type.startsWith('spoiler') && !lastItem.type.endsWith('end'));
 
-                    // Lógica para 'fechar' um spoiler
-                    if (type === 'spoiler_end') {
-                        if (parentStack.length > 1) { // Garante que não estamos a remover o nível principal
+                    // Logic to 'close' a spoiler based on the type
+                    if (type === 'spoiler2' || type === 'spoiler4') {
+                        if (parentStack.length > 1) { // Ensure we don't pop the main content array
                             parentStack.pop();
                         }
-                        return; // Não adiciona o item 'spoiler_end' ao conteúdo
+                        return; // Don't add the 'end' type to the content
                     }
 
                     const newItem = { type, text: text.replace(/\\n/g, '\n') };
                     
-                    if (type === 'spoiler') {
+                    if (type.startsWith('spoiler') && !type.endsWith('end')) {
                         newItem.title = spoilerTitle;
                         newItem.content = [];
                         parentStack[parentStack.length - 1].push(newItem);
@@ -400,7 +400,7 @@
             items.forEach(item => {
                 if (item.type === 'line' || item.type === 'title') {
                     lines.push(item.text);
-                } else if (item.type === 'spoiler') {
+                } else if (item.type.startsWith('spoiler') && !item.type.endsWith('end')) {
                     getCopyableLines(item.content, lines);
                 }
             });
@@ -459,7 +459,8 @@
                             html += `<div class="text-xs text-gray-400 px-3 py-2 rounded-r-lg bg-gray-800/40 border-l-2 border-gray-600 my-3 whitespace-pre-wrap justified-text">${processedText}</div>`;
                         }
                         break;
-                    case 'spoiler':
+                    case 'spoiler1':
+                    case 'spoiler3':
                         const uniqueSpoilerId = `spoiler-content-${currentStep}-${Math.random().toString(36).substr(2, 9)}`;
                         const spoilerContentHtml = renderContentRecursive(item.content, lineCounter);
                         html += `
