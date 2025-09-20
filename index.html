@@ -303,7 +303,7 @@
             <nav id="nav-bar" class="glass-card rounded-xl p-1.5 shadow-md">
                 <div id="nav-options" class="relative flex flex-wrap items-center justify-center gap-x-1 sm:gap-x-2">
                     <div id="nav-indicator"></div>
-                    <button data-option="CFi" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFI</button>
+                    <button data-option="CFI" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFI</button>
                     <button data-option="CFSd" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFSd</button>
                     <button data-option="CFCb" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFCb</button>
                     <button data-option="CFSgt" class="nav-btn relative z-10 font-medium py-1.5 px-3 text-sm rounded-lg">CFSgt</button>
@@ -332,10 +332,16 @@
     </div>
 
     <script>
-        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSeRTefEKdOe-ezBVY5_co68nKS5NhPBCbvF4hQj_SPA4Ps5EGWrpEblejqksWTcz0YxzE4TCGQCkC6/pub?output=csv';
+        const SPREADSHEET_ID = '2PACX-1vSeRTefEKdOe-ezBVY5_co68nKS5NhPBCbvF4hQj_SPA4Ps5EGWrpEblejqksWTcz0YxzE4TCGQCkC6';
+        const sheetGids = {
+            'CFI': '0', // GID da primeira página (geralmente 0)
+            'CFSd': '33705172', // Substituir com o GID real
+            'CFCb': '415282992', // Substituir com o GID real
+            'CFSgt': '1268101210', // Substituir com o GID real
+            'CFSbt': '1797899632', // Substituir com o GID real
+        };
 
         const appWrapper = document.getElementById('app-wrapper');
-        const navBar = document.getElementById('nav-bar');
         const navContainer = document.getElementById('nav-options');
         const contentBox = document.getElementById('content-box');
         const boxContent = document.getElementById('box-content');
@@ -354,145 +360,121 @@
         let currentStep = 0;
         let userNickname = '';
         let isInitialLayout = true;
-        let lastFetchedCSV = '';
+        let lastFetchedCSVCache = {};
+        let isFetching = false;
         
         let contentData = {};
         
-        function updateProgressBar(progress) {
-            progressBar.style.width = `${progress}%`;
-            progressText.textContent = `A carregar dados... ${Math.round(progress)}%`;
-            if (progress >= 100) {
-                 setTimeout(() => loaderOverlay.classList.remove('active'), 300);
-            }
-        }
-
-        async function fetchAndOrganizeData(isUpdate = false) {
-            if (!isUpdate) {
-                loaderOverlay.classList.add('active');
-                updateProgressBar(0);
+        async function fetchAndOrganizeData(courseId, isUpdate = false) {
+            if (isFetching) return;
+            isFetching = true;
+            
+            const gid = sheetGids[courseId];
+            if (!gid || gid.startsWith('GID_DA_PAGINA')) {
+                console.error(`GID para o curso ${courseId} não configurado.`);
+                boxContent.innerHTML = `<div class="text-center text-red-400 p-4 animate-fade-in">O GID para este curso não foi configurado.</div>`;
+                isFetching = false;
+                return;
             }
             
+            const sheetUrl = `https://docs.google.com/spreadsheets/d/e/${SPREADSHEET_ID}/pub?gid=${gid}&single=true&output=csv`;
+
             try {
-                const response = await fetch(SHEET_URL, { cache: "no-store" });
-                if (!response.ok) {
-                    throw new Error(`Network response was not ok: ${response.statusText}`);
-                }
+                const response = await fetch(sheetUrl, { cache: "no-store" });
+                if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
                 
-                const reader = response.body.getReader();
-                const contentLength = +response.headers.get('Content-Length');
-                let receivedLength = 0;
-                let chunks = [];
+                const csvText = await response.text();
 
-                while(true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                    receivedLength += value.length;
-                    
-                    if (contentLength && !isUpdate) {
-                        const progress = (receivedLength / contentLength) * 100;
-                        updateProgressBar(progress);
-                    }
-                }
-                
-                const totalBuffer = new Uint8Array(receivedLength);
-                let position = 0;
-                for(let chunk of chunks) {
-                    totalBuffer.set(chunk, position);
-                    position += chunk.length;
-                }
-                const csvText = new TextDecoder().decode(totalBuffer);
-
-                if (isUpdate && csvText === lastFetchedCSV) {
-                    console.log("Nenhuma atualização de conteúdo encontrada.");
+                if (isUpdate && csvText === lastFetchedCSVCache[courseId]) {
+                    console.log(`Nenhuma atualização para ${courseId}.`);
+                    isFetching = false;
                     return;
                 }
-                lastFetchedCSV = csvText;
+                lastFetchedCSVCache[courseId] = csvText;
 
                 const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '');
-                const courses = {};
-                const linesByCourse = {};
+                const courseData = { title: contentData[courseId]?.title || courseId, steps: [] };
+                let currentStepData = null;
+                let stack = [];
+
                 lines.forEach(line => {
                     const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(item => item.trim().replace(/^"|"$/g, ''));
-                    if (parts.length < 4) return;
-                    const [courseId] = parts;
-                    if (!courseId) return;
-                    if (!linesByCourse[courseId]) linesByCourse[courseId] = [];
-                    linesByCourse[courseId].push(parts);
+                    if (parts.length < 3) return;
+
+                    const [stepIndexStr, type, text, spoilerTitle] = parts;
+                    const stepIndex = parseInt(stepIndexStr, 10);
+                    if (!type || isNaN(stepIndex)) return;
+
+                    if (!currentStepData || currentStepData.index !== stepIndex) {
+                        currentStepData = courseData.steps.find(s => s.index === stepIndex);
+                        if (!currentStepData) {
+                            currentStepData = { index: stepIndex, content: [] };
+                            courseData.steps.push(currentStepData);
+                        }
+                        stack = [currentStepData.content];
+                    }
+                    const targetArray = stack[stack.length - 1];
+                    const newItem = { type, text: text ? text.replace(/\\n/g, '\n') : '' };
+
+                    if (type === 'spoiler1' || type === 'spoiler3') {
+                        newItem.title = spoilerTitle;
+                        newItem.content = [];
+                        targetArray.push(newItem);
+                        stack.push(newItem.content);
+                    } else if (type === 'spoiler2' || type === 'spoiler4') {
+                        if (stack.length > 1) stack.pop();
+                    } else {
+                        targetArray.push(newItem);
+                    }
                 });
+                courseData.steps.sort((a, b) => a.index - b.index);
 
-                for (const courseId in linesByCourse) {
-                    courses[courseId] = { title: courseId, steps: [] };
-                    const courseLines = linesByCourse[courseId];
-                    let currentStepData = null;
-                    let stack = [];
-
-                    courseLines.forEach(parts => {
-                        const [, stepIndexStr, type, text, spoilerTitle] = parts;
-                        const stepIndex = parseInt(stepIndexStr, 10);
-                        if (!type || isNaN(stepIndex)) return;
-
-                        if (!currentStepData || currentStepData.index !== stepIndex) {
-                            currentStepData = courses[courseId].steps.find(s => s.index === stepIndex);
-                            if (!currentStepData) {
-                                currentStepData = { index: stepIndex, content: [] };
-                                courses[courseId].steps.push(currentStepData);
-                            }
-                            stack = [currentStepData.content];
-                        }
-                        const targetArray = stack[stack.length - 1];
-                        const newItem = { type, text: text ? text.replace(/\\n/g, '\n') : '' };
-
-                        if (type === 'spoiler1' || type === 'spoiler3') {
-                            newItem.title = spoilerTitle;
-                            newItem.content = [];
-                            targetArray.push(newItem);
-                            stack.push(newItem.content);
-                        } else if (type === 'spoiler2' || type === 'spoiler4') {
-                            if (stack.length > 1) stack.pop();
-                        } else {
-                            targetArray.push(newItem);
-                        }
-                    });
-                    courses[courseId].steps.sort((a, b) => a.index - b.index);
-                }
-
-                if (courses['CFi']) courses['CFi'].title = 'CURSO DE FORMAÇÃO INICIAL';
-                if (courses['CFSd']) courses['CFSd'].title = 'CURSO DE FORMAÇÃO DE SOLDADO/POLICIAL';
-                if (courses['CFCb']) courses['CFCb'].title = 'CURSO DE FORMAÇÃO DE CABO/ESCRIVÃO';
-                if (courses['CFSgt']) courses['CFSgt'].title = 'CURSO DE FORMAÇÃO DE SARGENTO/DELEGADO';
-                if (courses['CFSbt']) courses['CFSbt'].title = 'CURSO DE FORMAÇÃO DE SUBTENENTE/ADVOGADO';
+                const titles = {
+                    'CFI': 'CURSO DE FORMAÇÃO INICIAL', 'CFSd': 'CURSO DE FORMAÇÃO DE SOLDADO/POLICIAL', 'CFCb': 'CURSO DE FORMAÇÃO DE CABO/ESCRIVÃO',
+                    'CFSgt': 'CURSO DE FORMAÇÃO DE SARGENTO/DELEGADO', 'CFSbt': 'CURSO DE FORMAÇÃO DE SUBTENENTE/ADVOGADO'
+                };
+                courseData.title = titles[courseId] || courseId;
                 
-                contentData = courses;
-                initializeCopiedStatus();
+                contentData[courseId] = courseData;
+                initializeCopiedStatusForCourse(courseId);
                 
-                if (isUpdate) {
+                if (isUpdate && currentOption === courseId) {
                     console.log("Conteúdo atualizado em tempo real!");
-                    if (currentOption) renderStep();
-                } else {
-                    console.log("Conteúdo das aulas carregado com sucesso!", contentData);
+                    renderStep();
                 }
 
             } catch (error) {
-                console.error("Erro ao carregar os dados das aulas:", error);
-                if (!isUpdate) {
-                    boxContent.innerHTML = `<div class="text-center text-red-400 p-4">Erro ao carregar o conteúdo. Por favor, recarregue a página.</div>`;
-                }
+                console.error(`Erro ao carregar dados para ${courseId}:`, error);
+                boxContent.innerHTML = `<div class="text-center text-red-400 p-4 animate-fade-in">Erro ao carregar o conteúdo. Tente novamente.</div>`;
             } finally {
-                 if (!isUpdate) {
-                    loaderOverlay.classList.remove('active');
-                 }
+                isFetching = false;
             }
         }
 
         async function initApp() {
-            await fetchAndOrganizeData();
             initializeUser();
-            setTimeout(() => {
-                document.querySelector('main').classList.remove('opacity-0');
-                document.querySelector('footer').classList.remove('opacity-0');
-            }, 100);
-            setInterval(() => fetchAndOrganizeData(true), 10000); // Verifica atualizações a cada 30 segundos
+            loaderOverlay.classList.add('active');
+            // Simulate initial loading for aesthetics even if there's no fetch
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 20;
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `A inicializar... ${progress}%`;
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        loaderOverlay.classList.remove('active');
+                        document.querySelector('main').classList.remove('opacity-0');
+                        document.querySelector('footer').classList.remove('opacity-0');
+                    }, 300);
+                }
+            }, 50);
+            
+            setInterval(() => {
+                if (currentOption && !isFetching) {
+                    fetchAndOrganizeData(currentOption, true);
+                }
+            }, 10000); // Check for updates every 10 seconds
         }
         
         function getCopyableLines(items, lines = []) {
@@ -507,14 +489,13 @@
             return lines;
         }
 
-        function initializeCopiedStatus() {
-            for (const key in contentData) {
-                if (contentData[key].steps) {
-                    contentData[key].copiedStatus = contentData[key].steps.map(step => {
-                        const lines = getCopyableLines(step.content);
-                        return lines.map(lineText => ({ text: lineText, status: 0 }));
-                    });
-                }
+        function initializeCopiedStatusForCourse(courseId) {
+            const course = contentData[courseId];
+            if (course && course.steps) {
+                course.copiedStatus = course.steps.map(step => {
+                    const lines = getCopyableLines(step.content);
+                    return lines.map(lineText => ({ text: lineText, status: 0 }));
+                });
             }
         }
         
@@ -617,66 +598,55 @@
         }
 
         function renderStep() {
+            const data = contentData[currentOption];
+            if (!data || !data.steps || data.steps.length === 0) {
+                 boxContent.innerHTML = `<div class="text-center text-gray-400 p-4 animate-fade-in">Nenhum conteúdo disponível para esta opção.</div>`;
+                return;
+            }
+
+            const stepData = data.steps.find(s => s.index === currentStep);
+             if (!stepData) {
+                currentStep = data.steps[0].index; // Fallback para o primeiro passo
+                renderStep();
+                return;
+            }
+            const totalSteps = data.steps.length;
+            const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
+            const lineCounter = { count: 0 };
+            const contentHtml = renderContentRecursive(stepData.content, lineCounter);
+            
+            const isFinalPage = stepData.content.some(item => item.type === 'final-page');
+
             boxContent.innerHTML = `
-                <div class="flex items-center justify-center h-full animate-fade-in">
-                    <svg class="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                <div class="flex flex-col h-full animate-fade-in">
+                    <h2 class="text-lg font-bold tracking-tight text-center mb-2 text-gray-100">${data.title}</h2>
+                    <div id="box-content-scroll" class="flex-grow overflow-y-auto pr-2 space-y-1 pb-3">
+                        ${contentHtml}
+                    </div>
+                    ${isFinalPage ? '' : `
+                    <div class="mt-auto pt-3 flex items-center justify-between border-t border-white/10">
+                        <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="prev-btn" title="Anterior" ${currentOrderIndex === 0 ? 'disabled' : ''}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500 font-medium text-sm">Página</span>
+                            <input type="number" id="step-input" class="w-12 text-center text-sm font-medium bg-gray-700/50 rounded-md border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500" value="${currentOrderIndex + 1}" min="1" max="${totalSteps}">
+                            <span class="text-gray-500 font-medium text-sm">de ${totalSteps}</span>
+                            <button id="go-btn" class="nav-control p-2 rounded-lg transition-colors text-gray-400" title="Ir para a página">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+                        
+                        <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="next-btn" title="Próximo" ${currentOrderIndex === totalSteps - 1 ? 'disabled' : ''}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                    </div>
+                    `}
                 </div>
             `;
             
-            setTimeout(() => {
-                const data = contentData[currentOption];
-                if (!data || !data.steps || data.steps.length === 0) {
-                     boxContent.innerHTML = `<div class="text-center text-gray-400 p-4 animate-fade-in">Nenhum conteúdo disponível para esta opção.</div>`;
-                    return;
-                }
-
-                const stepData = data.steps.find(s => s.index === currentStep);
-                 if (!stepData) {
-                    currentStep = 0; // Fallback to first step if current is invalid after an update
-                    renderStep();
-                    return;
-                }
-                const totalSteps = data.steps.length;
-                const currentOrderIndex = data.steps.findIndex(s => s.index === currentStep);
-                const lineCounter = { count: 0 };
-                const contentHtml = renderContentRecursive(stepData.content, lineCounter);
-                
-                const isFinalPage = stepData.content.some(item => item.type === 'final-page');
-
-                boxContent.innerHTML = `
-                    <div class="flex flex-col h-full animate-fade-in">
-                        <h2 class="text-lg font-bold tracking-tight text-center mb-2 text-gray-100">${data.title}</h2>
-                        <div id="box-content-scroll" class="flex-grow overflow-y-auto pr-2 space-y-1 pb-3">
-                            ${contentHtml}
-                        </div>
-                        ${isFinalPage ? '' : `
-                        <div class="mt-auto pt-3 flex items-center justify-between border-t border-white/10">
-                            <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="prev-btn" title="Anterior" ${currentOrderIndex === 0 ? 'disabled' : ''}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                            </button>
-                            
-                            <div class="flex items-center gap-2">
-                                <span class="text-gray-500 font-medium text-sm">Página</span>
-                                <input type="number" id="step-input" class="w-12 text-center text-sm font-medium bg-gray-700/50 rounded-md border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500" value="${currentOrderIndex + 1}" min="1" max="${totalSteps}">
-                                <span class="text-gray-500 font-medium text-sm">de ${totalSteps}</span>
-                                <button id="go-btn" class="nav-control p-2 rounded-lg transition-colors text-gray-400" title="Ir para a página">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                                </button>
-                            </div>
-                            
-                            <button class="nav-control p-2 rounded-lg transition-colors text-gray-400" id="next-btn" title="Próximo" ${currentOrderIndex === totalSteps - 1 ? 'disabled' : ''}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                            </button>
-                        </div>
-                        `}
-                    </div>
-                `;
-                
-                updateCopyStatusStyles();
-            }, 150);
+            updateCopyStatusStyles();
         }
 
         function updateCopyStatusStyles() {
@@ -722,15 +692,8 @@
             const nextOrderIndex = currentOrderIndex + direction;
 
             if (nextOrderIndex >= 0 && nextOrderIndex < data.steps.length) {
-                const contentContainer = boxContent.querySelector('.flex.flex-col');
-                if (contentContainer) {
-                    contentContainer.classList.remove('animate-fade-in');
-                    contentContainer.classList.add('animate-content-fade-out');
-                    setTimeout(() => {
-                        currentStep = data.steps[nextOrderIndex].index;
-                        renderStep();
-                    }, 300);
-                }
+                currentStep = data.steps[nextOrderIndex].index;
+                renderStep();
             }
         }
         
@@ -753,28 +716,38 @@
                     appWrapper.classList.add('pt-8', 'pb-8');
                 }
                 
-                const showNewContent = () => {
-                    currentOption = button.dataset.option;
-                    currentStep = 0; // Reset to first step of the new course
-                    initialMessage.classList.add('hidden');
-                    contentBox.classList.remove('hidden');
-                    contentBox.style.display = 'flex';
+                const showNewContent = async (option) => {
+                    currentOption = option;
+                    currentStep = 0; 
+                    
                     navButtons.forEach(btn => btn.classList.remove('active'));
                     button.classList.add('active');
                     updateNavIndicator(button);
-                    contentBox.classList.add('animate-slide-up-fade');
+
+                    initialMessage.classList.add('hidden');
+                    contentBox.classList.remove('hidden');
+                    contentBox.style.display = 'flex';
+                    
+                    boxContent.innerHTML = `<div class="flex items-center justify-center h-full"><svg class="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>`;
+                    
+                    if (!contentData[option]) {
+                        await fetchAndOrganizeData(option);
+                    }
+                    if (contentData[option]) { // Check if data was fetched successfully
+                        currentStep = contentData[option].steps[0]?.index || 0;
+                    }
                     renderStep();
                 };
-
-                if (currentOption && currentOption !== button.dataset.option) {
+                
+                const option = button.dataset.option;
+                if (currentOption !== option) {
                     contentBox.classList.remove('animate-slide-up-fade');
                     contentBox.classList.add('animate-fade-out');
                     setTimeout(() => {
                         contentBox.classList.remove('animate-fade-out');
-                        showNewContent();
+                        contentBox.classList.add('animate-slide-up-fade');
+                        showNewContent(option);
                     }, 300);
-                } else if (!currentOption) {
-                    showNewContent();
                 }
             }
         });
@@ -850,7 +823,7 @@
             if (isNaN(pageNumber) || pageNumber < 1 || pageNumber > totalSteps) {
                 stepInput.classList.add('border-red-500');
                 setTimeout(() => stepInput.classList.remove('border-red-500'), 1000);
-                stepInput.value = currentOrderIndex + 1; // Reset to current page number
+                stepInput.value = currentOrderIndex + 1;
                 return;
             } 
             
@@ -858,18 +831,8 @@
             const targetStep = data.steps[targetOrderIndex].index;
 
             if (targetStep !== currentStep) {
-                const contentContainer = boxContent.querySelector('.flex.flex-col');
-                if (contentContainer) {
-                    contentContainer.classList.remove('animate-fade-in');
-                    contentContainer.classList.add('animate-content-fade-out');
-                    setTimeout(() => {
-                        currentStep = targetStep;
-                        renderStep();
-                    }, 300);
-                } else {
-                    currentStep = targetStep;
-                    renderStep();
-                }
+                currentStep = targetStep;
+                renderStep();
             }
         }
 
