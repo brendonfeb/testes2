@@ -311,7 +311,6 @@
         
         let contentData = {};
         
-        // This function fetches data from the Google Sheet and organizes it.
         async function fetchAndOrganizeData() {
             try {
                 const response = await fetch(SHEET_URL);
@@ -319,13 +318,12 @@
                     throw new Error(`Network response was not ok: ${response.statusText}`);
                 }
                 const csvText = await response.text();
-                // Split the lines and filter out empty ones and the header to prevent parsing errors
                 const lines = csvText.split('\n').slice(1).filter(line => line.trim() !== '');
                 const courses = {};
                 
                 lines.forEach(line => {
                     const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(item => item.trim().replace(/^"|"$/g, ''));
-                    if (parts.length < 5) return; // Skip malformed lines
+                    if (parts.length < 5) return;
 
                     const [courseId, stepIndexStr, type, text, spoilerTitle] = parts;
                     const stepIndex = parseInt(stepIndexStr, 10);
@@ -333,9 +331,9 @@
                     if (!courseId || !type || isNaN(stepIndex)) return;
 
                     if (!courses[courseId]) {
-                        courses[courseId] = { title: courseId, steps: [], copiedStatus: [] };
+                        courses[courseId] = { title: courseId, steps: [] };
                     }
-                    let currentCourse = courses[courseId];
+                    const currentCourse = courses[courseId];
                     
                     let currentStepData = currentCourse.steps.find(s => s.index === stepIndex);
                     if (!currentStepData) {
@@ -343,20 +341,36 @@
                         currentCourse.steps.push(currentStepData);
                     }
                     
-                    let currentSpoiler = currentStepData.content.length > 0 && currentStepData.content[currentStepData.content.length - 1].type === 'spoiler' ? 
-                                        currentStepData.content[currentStepData.content.length - 1] : null;
+                    const parentStack = [currentStepData.content];
+                    
+                    // Encontrar o array de conteúdo mais aninhado para o passo atual
+                    let lastItem;
+                    do {
+                        lastItem = parentStack[parentStack.length - 1][parentStack[parentStack.length - 1].length - 1];
+                        if (lastItem && lastItem.type === 'spoiler') {
+                            parentStack.push(lastItem.content);
+                        }
+                    } while (lastItem && lastItem.type === 'spoiler');
 
+                    // Lógica para 'fechar' um spoiler
+                    if (type === 'spoiler_end') {
+                        if (parentStack.length > 1) { // Garante que não estamos a remover o nível principal
+                            parentStack.pop();
+                        }
+                        return; // Não adiciona o item 'spoiler_end' ao conteúdo
+                    }
+
+                    const newItem = { type, text: text.replace(/\\n/g, '\n') };
+                    
                     if (type === 'spoiler') {
-                        currentSpoiler = { type, title: spoilerTitle, content: [] };
-                        currentStepData.content.push(currentSpoiler);
-                    } else if (currentSpoiler) {
-                        currentSpoiler.content.push({ type, text: text.replace(/\\n/g, '\n') });
+                        newItem.title = spoilerTitle;
+                        newItem.content = [];
+                        parentStack[parentStack.length - 1].push(newItem);
                     } else {
-                        currentStepData.content.push({ type, text: text.replace(/\\n/g, '\n') });
+                        parentStack[parentStack.length - 1].push(newItem);
                     }
                 });
 
-                // Set course titles based on the course ID, checking if the course exists
                 if (courses['CFi']) courses['CFi'].title = 'CURSO DE FORMAÇÃO INICIAL';
                 if (courses['CFSd']) courses['CFSd'].title = 'CURSO DE FORMAÇÃO DE SOLDADO/POLICIAL';
                 if (courses['CFCb']) courses['CFCb'].title = 'CURSO DE FORMAÇÃO DE CABO/ESCRIVÃO';
@@ -372,7 +386,6 @@
             }
         }
 
-        // Wait for the DOM and data to be ready
         async function initApp() {
             await fetchAndOrganizeData();
             initializeUser();
@@ -399,7 +412,7 @@
                 if (contentData[key].steps) {
                     contentData[key].copiedStatus = contentData[key].steps.map(step => {
                         const lines = getCopyableLines(step.content);
-                        return lines.map(lineText => ({ text: lineText, status: 0 })); // 0: untouched, 1: copied, 2: skipped
+                        return lines.map(lineText => ({ text: lineText, status: 0 }));
                     });
                 }
             }
